@@ -4,6 +4,7 @@ import { runInspectTests } from "../src/tests/inspect.test.js";
 import { runIntegrationTests } from "../src/tests/integration.test.js";
 import { runPatchTests } from "../src/tests/patch.test.js";
 import { runReconcilerTests } from "../src/tests/reconciler.test.js";
+import { runRuntimeTests } from "../src/tests/runtime.test.js";
 import { runUtilsTests } from "../src/tests/utils.test.js";
 import { runVnodeTests } from "../src/tests/vnode.test.js";
 
@@ -14,48 +15,58 @@ const suites = [
   { name: "history", run: runHistoryTests },
   { name: "engine", run: runEngineTests },
   { name: "integration", run: runIntegrationTests },
+  { name: "runtime", run: runRuntimeTests },
   { name: "utils", run: runUtilsTests },
   { name: "inspect", run: runInspectTests },
 ];
 
-const flatCases = suites.flatMap((suite) =>
-  suite.run().map((testCase) => ({
-    suite: suite.name,
-    ...testCase,
-  }))
-);
+async function main() {
+  const groupedCases = await Promise.all(
+    suites.map(async (suite) => {
+      const cases = await suite.run();
+      return cases.map((testCase) => ({
+        suite: suite.name,
+        ...testCase,
+      }));
+    })
+  );
 
-const summary = flatCases.reduce(
-  (result, testCase) => {
-    result.total += 1;
+  const flatCases = groupedCases.flat();
 
-    if (testCase.skipped) {
-      result.skipped += 1;
+  const summary = flatCases.reduce(
+    (result, testCase) => {
+      result.total += 1;
+
+      if (testCase.skipped) {
+        result.skipped += 1;
+        return result;
+      }
+
+      if (testCase.passed) {
+        result.passed += 1;
+        return result;
+      }
+
+      result.failed += 1;
       return result;
-    }
+    },
+    { total: 0, passed: 0, failed: 0, skipped: 0 }
+  );
 
-    if (testCase.passed) {
-      result.passed += 1;
-      return result;
-    }
+  for (const testCase of flatCases) {
+    const prefix = testCase.skipped ? "SKIP" : testCase.passed ? "PASS" : "FAIL";
+    const detail = testCase.error ? `: ${testCase.error}` : "";
+    console.log(`[${prefix}] ${testCase.suite} :: ${testCase.name}${detail}`);
+  }
 
-    result.failed += 1;
-    return result;
-  },
-  { total: 0, passed: 0, failed: 0, skipped: 0 }
-);
+  console.log("");
+  console.log(
+    `Summary: total ${summary.total}, passed ${summary.passed}, failed ${summary.failed}, skipped ${summary.skipped}`
+  );
 
-for (const testCase of flatCases) {
-  const prefix = testCase.skipped ? "SKIP" : testCase.passed ? "PASS" : "FAIL";
-  const detail = testCase.error ? `: ${testCase.error}` : "";
-  console.log(`[${prefix}] ${testCase.suite} :: ${testCase.name}${detail}`);
+  if (summary.failed > 0) {
+    process.exitCode = 1;
+  }
 }
 
-console.log("");
-console.log(
-  `Summary: total ${summary.total}, passed ${summary.passed}, failed ${summary.failed}, skipped ${summary.skipped}`
-);
-
-if (summary.failed > 0) {
-  process.exitCode = 1;
-}
+await main();
