@@ -60,5 +60,17 @@ export function runPatchTests() {
         throw new Error("Expected child node removal.");
       }
     }),
+    runCase("apply multiple REMOVE_CHILD patches from the end of the same parent", () => {
+      const vnode = h("ul", null, h("li", null, "A"), h("li", null, "B"), h("li", null, "C"), h("li", null, "D"));
+      const root = createDomFromVNode(vnode);
+      applyPatches(root, [
+        { type: "REMOVE_CHILD", path: [], index: 1 },
+        { type: "REMOVE_CHILD", path: [], index: 3 },
+      ]);
+
+      if (root.childNodes.length !== 2 || root.textContent !== "AC") {
+        throw new Error("Expected multiple child removals to keep indices stable.");
+      }
+    }),
   ];
 }

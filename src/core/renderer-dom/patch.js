@@ -13,6 +13,32 @@ import { createDomFromVNode } from "./createDom.js";
 import { applyDomProp } from "./applyProps.js";
 import { setEvent, removeEvent } from "./applyEvents.js";
 
+function arePathsEqual(leftPath = [], rightPath = []) {
+  if (leftPath.length !== rightPath.length) {
+    return false;
+  }
+
+  return leftPath.every((segment, index) => segment === rightPath[index]);
+}
+
+function orderPatches(patches = []) {
+  return patches
+    .map((patch, originalIndex) => ({ patch, originalIndex }))
+    .sort((left, right) => {
+      const leftPatch = left.patch;
+      const rightPatch = right.patch;
+      const leftIsRemove = leftPatch.type === PATCH_TYPES.REMOVE_CHILD;
+      const rightIsRemove = rightPatch.type === PATCH_TYPES.REMOVE_CHILD;
+
+      if (leftIsRemove && rightIsRemove && arePathsEqual(leftPatch.path, rightPatch.path)) {
+        return rightPatch.index - leftPatch.index;
+      }
+
+      return left.originalIndex - right.originalIndex;
+    })
+    .map((entry) => entry.patch);
+}
+
 function getDomNodeByPath(rootDom, path = []) {
   let current = rootDom;
 
@@ -120,7 +146,7 @@ export function applySinglePatch(rootDom, patch, context = {}) {
  * - patch list 전체를 순차 적용한다.
  */
 export function applyPatches(rootDom, patches = [], context = {}) {
-  for (const patch of patches) {
+  for (const patch of orderPatches(patches)) {
     applySinglePatch(rootDom, patch, context);
   }
 

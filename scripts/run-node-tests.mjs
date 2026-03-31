@@ -1,3 +1,4 @@
+import { runAppTests } from "../src/tests/app.test.js";
 import { installTestDomEnvironment } from "../src/tests/support/testDomEnvironment.js";
 import { runEngineTests } from "../src/tests/engine.test.js";
 import { runHistoryTests } from "../src/tests/history.test.js";
@@ -19,6 +20,7 @@ const suites = [
   { name: "engine", run: runEngineTests },
   { name: "integration", run: runIntegrationTests },
   { name: "runtime", run: runRuntimeTests },
+  { name: "app", run: runAppTests },
   { name: "utils", run: runUtilsTests },
   { name: "inspect", run: runInspectTests },
 ];

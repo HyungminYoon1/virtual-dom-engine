@@ -62,6 +62,33 @@ export async function runRuntimeTests() {
         throw new Error("Expected state updates to re-render the resolved child tree.");
       }
     }),
+    runCase("stateless child components receive function props without losing them to DOM event extraction", () => {
+      const root = document.createElement("div");
+
+      function Child(props) {
+        return h("button", { onClick: props.onPress }, props.label);
+      }
+
+      function App() {
+        const [count, setCount] = useState(0);
+
+        return h("section", null,
+          h(Child, {
+            label: `count:${count}`,
+            onPress: () => setCount((previousValue) => previousValue + 1),
+          })
+        );
+      }
+
+      createApp({ root, component: App }).mount();
+
+      const button = root.querySelector("button");
+      button.dispatchEvent(new Event("click", { bubbles: true }));
+
+      if (root.textContent !== "count:1") {
+        throw new Error("Expected function props to reach stateless child components unchanged.");
+      }
+    }),
     runCase("updateProps replaces external props instead of merging them", () => {
       const root = document.createElement("div");
 

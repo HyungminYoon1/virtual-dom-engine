@@ -16,7 +16,7 @@ import { normalizeChildren } from "./normalizeChildren.js";
 import { RESERVED_PROPS } from "../shared/constants.js";
 import { isFunction, isObject, toEventName } from "../shared/utils.js";
 
-function normalizeProps(rawProps) {
+function normalizeProps(tag, rawProps) {
   if (!isObject(rawProps)) {
     return { key: null, props: {}, events: {} };
   }
@@ -24,6 +24,7 @@ function normalizeProps(rawProps) {
   const props = {};
   const events = {};
   let key = null;
+  const shouldExtractDomEvents = !isFunction(tag);
 
   for (const [name, value] of Object.entries(rawProps)) {
     if (name === RESERVED_PROPS.KEY) {
@@ -33,7 +34,7 @@ function normalizeProps(rawProps) {
 
     const eventName = toEventName(name);
 
-    if (eventName && isFunction(value)) {
+    if (shouldExtractDomEvents && eventName && isFunction(value)) {
       events[eventName] = value;
       continue;
     }
@@ -57,7 +58,7 @@ function normalizeProps(rawProps) {
  * - canonical element vnode
  */
 export function h(tag, props, ...children) {
-  const normalized = normalizeProps(props);
+  const normalized = normalizeProps(tag, props);
 
   return createElementVNode(tag, {
     key: normalized.key,
