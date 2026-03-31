@@ -323,7 +323,8 @@
     }
 
     .insight-list,
-    .detail-stat-list {
+    .detail-stat-list,
+    .detail-base-stats-list {
       display: grid;
       gap: 10px;
       padding: 0;
@@ -593,6 +594,43 @@
 
     .detail-flavor {
       font-size: 15px;
+    }
+
+    .detail-base-stats-block {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .detail-subtitle {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: -0.02em;
+    }
+
+    .detail-stat-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .detail-stat-name {
+      color: var(--muted);
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .detail-stat-value {
+      font-size: 18px;
+      letter-spacing: -0.03em;
+      color: #f5f9ff;
     }
 
     .empty-detail-card {

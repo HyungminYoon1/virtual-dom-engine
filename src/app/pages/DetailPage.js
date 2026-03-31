@@ -8,6 +8,37 @@ import { PageHeader } from "../components/PageHeader.js";
 import { SummaryCard } from "../components/SummaryCard.js";
 import { CardShowcase } from "../components/CardShowcase.js";
 
+function getBaseStatTotal(card) {
+  if (!card.baseStats) {
+    return null;
+  }
+
+  return Object.values(card.baseStats).reduce((sum, value) => sum + Number(value || 0), 0);
+}
+
+function renderBaseStatRows(card) {
+  if (!card.baseStats) {
+    return [];
+  }
+
+  return [
+    ["HP", card.baseStats.hp],
+    ["Attack", card.baseStats.attack],
+    ["Defense", card.baseStats.defense],
+    ["Sp. Atk", card.baseStats.specialAttack],
+    ["Sp. Def", card.baseStats.specialDefense],
+    ["Speed", card.baseStats.speed],
+  ].map(([label, value]) =>
+    h("li", {
+      key: label,
+      className: "detail-stat-row",
+    },
+      h("span", { className: "detail-stat-name" }, label),
+      h("strong", { className: "detail-stat-value" }, String(value))
+    )
+  );
+}
+
 function renderTypeBadges(types) {
   return types.map((type) =>
     h("span", { key: type, className: `type-chip type-chip-${type}` }, type)
@@ -26,6 +57,8 @@ function renderRelatedCards(cards, onSelect) {
 }
 
 export function DetailPage(props) {
+  const baseStatTotal = props.card ? getBaseStatTotal(props.card) : null;
+
   if (!props.card) {
     return h("section", { id: "page-detail", className: "page-stack" },
       h(PageHeader, {
@@ -78,10 +111,10 @@ export function DetailPage(props) {
             help: "A quick summary value derived from the selected card record.",
           }),
           h(SummaryCard, {
-            id: "detail-card-hp",
-            label: "HP",
-            value: String(props.card.hp),
-            help: "The selected card stats update as soon as the selected card changes.",
+            id: "detail-card-bst",
+            label: "Base Stat Total",
+            value: baseStatTotal !== null ? String(baseStatTotal) : "N/A",
+            help: "Species base stats are grouped together instead of showing HP alone.",
             tone: "warm",
           })
         ),
@@ -96,6 +129,12 @@ export function DetailPage(props) {
             h("li", { id: "detail-stat-height" }, `Height · ${props.card.height}m`),
             h("li", { id: "detail-stat-weight" }, `Weight · ${props.card.weight}kg`)
           ),
+          props.card.baseStats
+            ? h("div", { className: "detail-base-stats-block" },
+              h("h3", { className: "detail-subtitle" }, "Species Base Stats"),
+              h("ul", { id: "detail-base-stats", className: "detail-base-stats-list" }, ...renderBaseStatRows(props.card))
+            )
+            : null,
           h("p", { id: "detail-card-flavor", className: "detail-flavor" }, props.card.flavor),
           h("div", { className: "detail-button-row" },
             h("button", {

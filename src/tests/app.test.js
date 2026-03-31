@@ -82,6 +82,12 @@ export async function runAppTests() {
       if (!root.querySelector("#detail-card-name").textContent.includes("Charizard")) {
         throw new Error("Expected detail page to render the selected card.");
       }
+
+      const statText = root.querySelector("#detail-base-stats").textContent;
+
+      if (!statText.includes("Attack") || !statText.includes("Speed")) {
+        throw new Error("Expected detail page to render the full base stat list instead of HP alone.");
+      }
     }),
     runCase("card showcase favorites update dashboard metrics immediately", async () => {
       const { root } = createMountedApp();
