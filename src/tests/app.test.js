@@ -84,5 +84,60 @@ export async function runAppTests() {
         throw new Error("Expected insight panel action text to stay in sync after toggle.");
       }
     }),
+    runCase("focus routine board supports filter, sort and remove flows", async () => {
+      const root = document.createElement("div");
+      createApp({ root, component: App, batching: "microtask" }).mount();
+      await flushMicrotasks();
+
+      const statusFilter = root.querySelector("#routine-status-filter");
+      const priorityFilter = root.querySelector("#routine-priority-filter");
+      const sortSelect = root.querySelector("#routine-sort-select");
+      if (!statusFilter || !priorityFilter || !sortSelect) {
+        throw new Error("Expected filter controls and default remove action to expose stable selectors.");
+      }
+
+      priorityFilter.value = "high";
+      priorityFilter.dispatchEvent(new Event("change", { bubbles: true }));
+      await flushMicrotasks();
+
+      if (root.querySelectorAll("article").length !== 2) {
+        throw new Error("Expected priority filter to narrow the visible routines to the two high-priority cards.");
+      }
+
+      statusFilter.value = "active";
+      statusFilter.dispatchEvent(new Event("change", { bubbles: true }));
+      await flushMicrotasks();
+
+      sortSelect.value = "title";
+      sortSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      await flushMicrotasks();
+
+      const orderedArticles = root.querySelectorAll("article");
+
+      if (!orderedArticles[0] || !orderedArticles[0].textContent.includes("알고리즘 문제 2개 풀기")) {
+        throw new Error("Expected title sort to place the algorithm routine first in the visible list.");
+      }
+
+      const removeButton = root.querySelector("#routine-remove-routine-1");
+
+      if (!removeButton) {
+        throw new Error("Expected the filtered routine card to expose a stable remove selector.");
+      }
+
+      removeButton.dispatchEvent(new Event("click", { bubbles: true }));
+      await flushMicrotasks();
+
+      if (root.querySelector("#routine-card-routine-1")) {
+        throw new Error("Expected delete flow to remove the target routine from the board.");
+      }
+
+      if (root.querySelectorAll("article").length !== 1) {
+        throw new Error("Expected delete flow to reduce the visible routine count.");
+      }
+
+      if (!root.textContent.includes("삭제했습니다")) {
+        throw new Error("Expected the insight panel to reflect the delete action.");
+      }
+    }),
   ]);
 }

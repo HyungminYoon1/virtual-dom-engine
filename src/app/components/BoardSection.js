@@ -13,9 +13,10 @@ function renderItems(props) {
     ];
   }
 
-  return props.items.map((routine) =>
+  return props.items.map((routine, index) =>
     h(RoutineCard, {
       key: routine.id,
+      sequence: index,
       routine,
       categoryLabels: props.categoryLabels,
       priorityLabels: props.priorityLabels,
@@ -28,7 +29,10 @@ function renderItems(props) {
 export function BoardSection(props) {
   return h("section", { className: "board-section" },
     h("div", { className: "board-section-header" },
-      h("h2", null, props.title),
+      h("div", { className: "board-heading-row" },
+        h("h2", null, props.title),
+        h("span", { className: "section-count-badge" }, `${props.count}개`)
+      ),
       h("p", null, props.description)
     ),
     h("div", { className: "card-grid" }, ...renderItems(props))

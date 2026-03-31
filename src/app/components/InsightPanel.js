@@ -34,10 +34,15 @@ export function InsightPanel(props) {
       h("div", { className: "insight-card" },
         h("span", { className: "insight-label" }, "완료율"),
         h("strong", { className: "insight-value" }, props.totalCount === 0 ? "0%" : `${Math.round((props.doneCount / props.totalCount) * 100)}%`)
+      ),
+      h("div", { className: "insight-card" },
+        h("span", { className: "insight-label" }, "바로 집중할 루틴"),
+        h("strong", { className: "insight-value" }, `${props.focusNowCount}개`)
       )
     ),
     h("div", { className: "category-summary" },
       h("h3", null, "현재 화면 기준 카테고리 요약"),
+      h("p", { className: "insight-empty" }, props.topCategory),
       h("ul", null, ...renderCategorySummary(props.categorySummary))
     )
   );

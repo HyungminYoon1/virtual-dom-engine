@@ -20,10 +20,19 @@ export function FilterBar(props) {
       h("h2", null, "필터와 정렬"),
       h("p", null, "useMemo로 계산한 파생 리스트를 이 영역에서 제어합니다.")
     ),
+    h("div", { className: "filter-summary" },
+      h("strong", { className: "filter-summary-count" }, `현재 ${props.visibleCount} / ${props.totalCount}`),
+      h("div", { className: "filter-chip-list" },
+        ...props.activeFilterSummary.map((item) =>
+          h("span", { className: "filter-chip", key: item }, item)
+        )
+      )
+    ),
     h("div", { className: "filter-grid" },
       h("label", { className: "field" },
         h("span", { className: "field-label" }, "상태"),
         h("select", {
+          id: "routine-status-filter",
           value: props.statusFilter,
           onChange: props.onStatusFilterChange,
         },
@@ -35,6 +44,7 @@ export function FilterBar(props) {
       h("label", { className: "field" },
         h("span", { className: "field-label" }, "중요도"),
         h("select", {
+          id: "routine-priority-filter",
           value: props.priorityFilter,
           onChange: props.onPriorityFilterChange,
         }, ...renderPriorityOptions(props.priorityLabels))
@@ -51,6 +61,7 @@ export function FilterBar(props) {
       h("label", { className: "field" },
         h("span", { className: "field-label" }, "정렬"),
         h("select", {
+          id: "routine-sort-select",
           value: props.sortMode,
           onChange: props.onSortChange,
         },

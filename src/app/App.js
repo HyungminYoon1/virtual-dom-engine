@@ -24,6 +24,18 @@ const PRIORITY_LABELS = Object.freeze({
   low: "낮음",
 });
 
+const STATUS_LABELS = Object.freeze({
+  all: "전체 상태",
+  active: "진행 중",
+  done: "완료",
+});
+
+const SORT_LABELS = Object.freeze({
+  created: "생성순",
+  priority: "중요도순",
+  title: "이름순",
+});
+
 const PRIORITY_SCORE = Object.freeze({
   high: 3,
   medium: 2,
@@ -161,6 +173,25 @@ function groupRoutines(items) {
   };
 }
 
+function getFilterSummary(statusFilter, priorityFilter, searchKeyword, sortMode) {
+  const summary = [];
+
+  if (statusFilter !== "all") {
+    summary.push(`상태: ${STATUS_LABELS[statusFilter] ?? statusFilter}`);
+  }
+
+  if (priorityFilter !== "all") {
+    summary.push(`중요도: ${PRIORITY_LABELS[priorityFilter] ?? priorityFilter}`);
+  }
+
+  if (searchKeyword.trim()) {
+    summary.push(`검색: ${searchKeyword.trim()}`);
+  }
+
+  summary.push(`정렬: ${SORT_LABELS[sortMode] ?? sortMode}`);
+  return summary;
+}
+
 export function App() {
   const [routines, setRoutines] = useState(() => parseStoredRoutines());
   const [draftTitle, setDraftTitle] = useState("");
@@ -207,6 +238,12 @@ export function App() {
 
   const visibleCount = useMemo(() => visibleRoutines.length, [visibleRoutines]);
 
+  const focusNowCount = useMemo(() => groupedBoard.focusNow.length, [groupedBoard]);
+
+  const activeFilterSummary = useMemo(() => {
+    return getFilterSummary(statusFilter, priorityFilter, searchKeyword, sortMode);
+  }, [priorityFilter, searchKeyword, sortMode, statusFilter]);
+
   const categorySummary = useMemo(() => {
     const summary = Object.keys(CATEGORY_LABELS).map((category) => {
       const count = visibleRoutines.filter((routine) => routine.category === category).length;
@@ -219,6 +256,15 @@ export function App() {
 
     return summary.filter((item) => item.count > 0);
   }, [visibleRoutines]);
+
+  const topCategory = useMemo(() => {
+    if (categorySummary.length === 0) {
+      return "지금은 화면에 보이는 루틴이 없습니다.";
+    }
+
+    const [leader] = categorySummary.slice().sort((left, right) => right.count - left.count);
+    return `${leader.label} 루틴이 ${leader.count}개로 가장 많습니다.`;
+  }, [categorySummary]);
 
   const todayLabel = useMemo(() => formatTodayLabel(), []);
 
@@ -358,6 +404,9 @@ export function App() {
       priorityFilter,
       searchKeyword,
       sortMode,
+      visibleCount,
+      totalCount,
+      activeFilterSummary,
       priorityLabels: PRIORITY_LABELS,
       onStatusFilterChange: handleStatusFilterChange,
       onPriorityFilterChange: handlePriorityFilterChange,
@@ -368,6 +417,7 @@ export function App() {
       h(BoardSection, {
         title: "Focus Now",
         description: "가장 먼저 처리해야 할 높은 중요도의 루틴입니다.",
+        count: groupedBoard.focusNow.length,
         items: groupedBoard.focusNow,
         emptyMessage: "지금 당장 집중해야 할 루틴이 없습니다.",
         categoryLabels: CATEGORY_LABELS,
@@ -378,6 +428,7 @@ export function App() {
       h(BoardSection, {
         title: "In Progress",
         description: "현재 진행 중인 루틴입니다.",
+        count: groupedBoard.inProgress.length,
         items: groupedBoard.inProgress,
         emptyMessage: "진행 중인 루틴이 없습니다.",
         categoryLabels: CATEGORY_LABELS,
@@ -388,6 +439,7 @@ export function App() {
       h(BoardSection, {
         title: "Done",
         description: "오늘 완료한 루틴입니다.",
+        count: groupedBoard.done.length,
         items: groupedBoard.done,
         emptyMessage: "완료한 루틴이 아직 없습니다.",
         categoryLabels: CATEGORY_LABELS,
@@ -401,6 +453,8 @@ export function App() {
       visibleCount,
       totalCount,
       doneCount,
+      focusNowCount,
+      topCategory,
       categorySummary,
     })
   );

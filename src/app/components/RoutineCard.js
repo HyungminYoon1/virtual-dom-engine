@@ -23,12 +23,14 @@ export function RoutineCard(props) {
   return h("article", {
     className: cardClassName,
     id: `routine-card-${props.routine.id}`,
+    style: `animation-delay: ${Math.max(0, props.sequence ?? 0) * 20}ms`,
   },
     h("div", { className: "routine-topline" },
       h("span", { className: "badge badge-category" }, categoryLabel),
       h("span", { className: `badge badge-priority badge-priority-${props.routine.priority}` }, priorityLabel)
     ),
     h("h3", { className: "routine-title" }, props.routine.title),
+    h("p", { className: "routine-caption" }, `${categoryLabel} 집중 블록 · ${priorityLabel} 우선순위`),
     h("p", { className: "routine-meta" }, `${props.routine.done ? "완료됨" : "진행 중"} · ${formatTime(props.routine.createdAt)}`),
     h("div", { className: "routine-actions" },
       h("button", {
