@@ -7,6 +7,8 @@ import { h } from "../../index.js";
 
 export function CardShowcase(props) {
   const card = props.card;
+  // 설정 페이지에서 고해상도 이미지를 끄면 네트워크 부담을 줄이기 위해
+  // 더 작은 썸네일을 쓰도록 분기한다.
   const imageUrl = props.highResImage ? card.imageUrl : card.thumbUrl;
 
   return h("article", {
@@ -18,6 +20,8 @@ export function CardShowcase(props) {
     onMousemove: props.onPointerMove ? (event) => props.onPointerMove(event, card.id) : undefined,
     onMouseleave: props.onPointerLeave ? (event) => props.onPointerLeave(event, card.id) : undefined,
   },
+    // 아래 레이어들은 "카드 표면 재질"을 만들기 위한 시각 효과다.
+    // 실제 카드 데이터 변경과는 무관하며, DOM 스타일만 움직인다.
     h("div", { className: "card-light-frame is-detail" }),
     h("div", { className: "card-prism-layer is-detail" }),
     h("div", { className: "card-sparkle-layer is-detail" }),

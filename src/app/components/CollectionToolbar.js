@@ -6,6 +6,8 @@
 import { h } from "../../index.js";
 
 function renderTypeOptions(typeLabels) {
+  // select의 option 목록도 루트 상수에서 받아오므로,
+  // 타입 체계가 바뀌어도 이 컴포넌트는 렌더링 역할만 유지하면 된다.
   return [
     h("option", { key: "all", value: "all" }, "All Types"),
     ...Object.entries(typeLabels).map(([value, label]) =>
@@ -23,6 +25,8 @@ function renderSortOptions() {
 }
 
 export function CollectionToolbar(props) {
+  // 이 툴바는 실제 상태를 소유하지 않는다.
+  // 입력 값과 변경 핸들러는 모두 루트 App이 내려주기 때문에 stateless 규칙을 지킨다.
   return h("section", { className: "panel-card toolbar-card" },
     h("div", { className: "panel-heading" },
       h("h2", null, "Collection Controls"),

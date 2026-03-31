@@ -7,6 +7,7 @@ import { h } from "../../index.js";
 import { PageHeader } from "../components/PageHeader.js";
 
 function renderPageOptions(pages) {
+  // detail은 카드 선택이 있어야 의미가 있으므로 기본 시작 페이지 후보에서는 제외한다.
   return Object.entries(pages)
     .filter(([page]) => page !== "detail")
     .map(([page, meta]) => h("option", { key: page, value: page }, meta.label));
@@ -21,6 +22,8 @@ function renderSortOptions() {
 }
 
 export function SettingsPage(props) {
+  // SettingsPage도 상태를 직접 만들지 않는다.
+  // 모든 설정 값은 루트 App이 소유하고, 이 페이지는 입력 UI만 렌더한다.
   return h("section", { id: "page-settings", className: "page-stack" },
     h(PageHeader, {
       kicker: "Settings",

@@ -16,14 +16,20 @@ const CATALOG_CACHE_KEY = "card-showcase-catalog-cache";
 const MAX_NATIONAL_DEX = 1025;
 
 function canUseLocalStorage() {
+  // 브라우저가 localStorage를 제공하지 않는 환경(예: 일부 테스트 환경)에서도
+  // 앱이 죽지 않도록 먼저 기능 존재 여부를 확인한다.
   return typeof localStorage !== "undefined";
 }
 
 function getDataMode() {
+  // 테스트에서는 네트워크 없이도 안정적으로 동작해야 하므로,
+  // 전역 플래그로 "local" 모드를 강제할 수 있게 해 둔다.
   return globalThis.__CARD_SHOWCASE_DATA_MODE__ === "local" ? "local" : "remote";
 }
 
 function cloneDefaultCards() {
+  // 샘플 카드 배열을 그대로 재사용하면 즐겨찾기 변경 같은 상태가 원본 상수까지
+  // 오염될 수 있다. 그래서 렌더에 쓸 때는 항상 복사본을 만든다.
   return CARD_LIBRARY.map((card) => ({
     ...card,
     types: card.types.slice(),
@@ -32,6 +38,8 @@ function cloneDefaultCards() {
 }
 
 function readStoredJson(key) {
+  // localStorage 파싱 실패는 사용자 데이터 손상이나 브라우저 정책으로 쉽게
+  // 생길 수 있다. 여기서는 예외를 밖으로 던지지 않고 "없음"으로 취급한다.
   if (!canUseLocalStorage()) {
     return null;
   }
@@ -45,6 +53,8 @@ function readStoredJson(key) {
 }
 
 function parseStoredSettings() {
+  // 저장된 설정은 일부 필드만 있을 수 있으므로, 문서에 정의된 기본 설정과
+  // 병합해 항상 완전한 settings 객체를 만든다.
   const parsed = readStoredJson("card-showcase-settings");
 
   if (!parsed || typeof parsed !== "object") {
@@ -61,6 +71,8 @@ function parseStoredSettings() {
 }
 
 function readStoredFavoriteIds() {
+  // 현재 버전은 favorite id 목록만 저장하지만,
+  // 예전 버전과의 호환을 위해 legacy 카드 배열도 읽을 수 있게 유지한다.
   const explicitIds = readStoredJson("card-showcase-favorites");
 
   if (Array.isArray(explicitIds)) {
@@ -77,6 +89,8 @@ function readStoredFavoriteIds() {
 }
 
 function readCatalogCache() {
+  // 원격 카탈로그를 다시 불러오기 전에 이전 성공 결과를 보여주기 위한 캐시다.
+  // 단, 문서 기준으로 정규 전국도감 1025번까지만 허용하므로 그 범위를 넘는 카드는 버린다.
   const parsed = readStoredJson(CATALOG_CACHE_KEY);
 
   if (!Array.isArray(parsed) || parsed.length === 0) {
@@ -92,6 +106,8 @@ function readCatalogCache() {
 }
 
 function writeCatalogCache(cards) {
+  // 캐시는 "목록을 빠르게 다시 보여주기 위한 최소 데이터"라는 성격이므로
+  // 세션성 상태인 isFavorite은 저장하지 않는다.
   if (!canUseLocalStorage() || !Array.isArray(cards) || cards.length === 0) {
     return;
   }
@@ -105,6 +121,9 @@ function writeCatalogCache(cards) {
 }
 
 function mergeFavoriteFlags(cards, favoriteIds) {
+  // 원격 데이터와 로컬 즐겨찾기 상태를 합치는 단계다.
+  // 외부 API 응답은 "카드 자체 정보"만 담고 있고,
+  // 사용자의 즐겨찾기 여부는 앱이 따로 덧씌운다.
   const favoriteSet = new Set(favoriteIds);
 
   return cards.map((card) => ({
@@ -116,6 +135,8 @@ function mergeFavoriteFlags(cards, favoriteIds) {
 }
 
 function createPageItems(pages) {
+  // AppShell과 네비게이션은 전체 PAGE_META가 아니라,
+  // label만 있는 단순 구조면 충분하므로 표시용 데이터만 추린다.
   return Object.keys(pages).reduce((result, page) => {
     result[page] = { label: pages[page].label };
     return result;
@@ -123,6 +144,8 @@ function createPageItems(pages) {
 }
 
 function sortCards(cards, sortMode) {
+  // 정렬은 원본 배열을 직접 바꾸지 않도록 항상 복사본에서 수행한다.
+  // 그래야 useMemo와 상태 비교가 더 예측 가능해진다.
   const nextCards = cards.slice();
 
   nextCards.sort((left, right) => {
@@ -145,6 +168,8 @@ function sortCards(cards, sortMode) {
 }
 
 function filterCards(cards, filters) {
+  // 검색, 타입 필터, 즐겨찾기 필터를 한 곳에 모아 두면
+  // 컬렉션 페이지가 "어떤 카드가 보여야 하는지"를 읽기 쉬워진다.
   const normalizedKeyword = filters.searchKeyword.trim().toLowerCase();
 
   return cards.filter((card) => {
@@ -165,6 +190,8 @@ function filterCards(cards, filters) {
 }
 
 function buildTypeSummary(cards) {
+  // 대시보드 요약 패널은 cards 전체가 아니라 "현재 보이는 카드"를 기준으로
+  // 계산해야 사용자가 필터 결과와 요약 수치를 함께 이해할 수 있다.
   return Object.entries(TYPE_LABELS)
     .map(([type, label]) => ({
       type,
@@ -176,6 +203,8 @@ function buildTypeSummary(cards) {
 }
 
 function resolveTopTypeMessage(typeSummary) {
+  // 대시보드 설명 문구도 파생 데이터다.
+  // 미리 문자열로 만들어 두면 페이지 컴포넌트는 렌더링 역할에만 집중할 수 있다.
   if (typeSummary.length === 0) {
     return "Type insight will appear as soon as cards are available.";
   }
@@ -185,10 +214,14 @@ function resolveTopTypeMessage(typeSummary) {
 }
 
 function getCardIndex(cards, selectedCardId) {
+  // 상세 페이지의 "Next Card" 버튼은 현재 선택 카드가 목록에서 몇 번째인지 알아야 한다.
   return cards.findIndex((card) => card.id === selectedCardId);
 }
 
 function applyInteractiveStyle(element, options) {
+  // 카드 기울기/광택은 초당 매우 자주 바뀌는 고빈도 인터랙션이다.
+  // 이것을 useState로 처리하면 루트 앱 전체가 매번 다시 렌더될 수 있으므로,
+  // 카드 DOM 요소에 CSS 변수를 직접 써서 시각 효과만 국소적으로 갱신한다.
   if (!element) {
     return;
   }
@@ -204,6 +237,9 @@ function applyInteractiveStyle(element, options) {
 }
 
 function mergeCardWithDetail(card, detail) {
+  // 목록 페이지용 간단 데이터(card)와 상세 페이지용 추가 데이터(detail)를 합친다.
+  // 이렇게 분리하면 초기 목록 로딩은 가볍게 유지하고,
+  // 상세 페이지에 들어갔을 때만 더 많은 정보를 덧붙일 수 있다.
   if (!card) {
     return null;
   }
@@ -223,6 +259,8 @@ function mergeCardWithDetail(card, detail) {
 }
 
 function createLocalDetail(card) {
+  // 원격 상세 로딩이 없거나 실패했을 때도 Detail 페이지가 완전히 비지 않도록
+  // 기본 카드 데이터만으로 만들 수 있는 최소 상세 정보를 준비한다.
   return {
     types: card.types.slice(),
     height: card.height,
@@ -233,6 +271,8 @@ function createLocalDetail(card) {
 }
 
 export function App() {
+  // App은 문서에서 정의한 "단일 루트 상태 저장소" 역할을 그대로 수행한다.
+  // 여기 있는 상태가 대시보드, 컬렉션, 상세, 설정 페이지 전체를 움직인다.
   const initialSettings = parseStoredSettings();
   const [settings, setSettings] = useState(() => initialSettings);
   const [currentPage, setCurrentPage] = useState(() => initialSettings.defaultPage ?? "dashboard");
@@ -252,6 +292,8 @@ export function App() {
   const [catalogNotice, setCatalogNotice] = useState(null);
 
   const pageItems = useMemo(() => createPageItems(PAGE_META), []);
+  // visibleCards는 카드 앱의 핵심 파생 데이터다.
+  // 검색/필터/정렬 결과를 매 렌더마다 즉석 계산하지 않고 useMemo로 캐싱한다.
   const visibleCards = useMemo(() => sortCards(filterCards(cards, {
     searchKeyword,
     typeFilter,
@@ -272,6 +314,8 @@ export function App() {
   }, [selectedCard, visibleCards]);
 
   useEffect(() => {
+    // 페이지 전환이 실제로 반영되고 있음을 브라우저 탭 제목에서도 보여준다.
+    // 발표 때 "상태 기반 다중 페이지"를 설명하기 좋은 작은 효과다.
     document.title = `${PAGE_META[currentPage]?.title ?? "Showcase"} · Prism Dex`;
 
     return () => {
@@ -280,6 +324,9 @@ export function App() {
   }, [currentPage]);
 
   useEffect(() => {
+    // 최초 데이터 로드와 "다시 불러오기"를 담당하는 effect다.
+    // 캐시 -> 원격 새로고침 -> 실패 시 fallback 순서로 동작해
+    // 시연 중 네트워크가 불안정해도 앱이 완전히 깨지지 않게 한다.
     let isActive = true;
 
     async function loadCatalog() {
@@ -357,6 +404,7 @@ export function App() {
   }, [catalogVersion]);
 
   useEffect(() => {
+    // 즐겨찾기는 사용자의 개인 상태이므로 카드 배열이 바뀔 때마다 따로 저장한다.
     if (!canUseLocalStorage()) {
       return;
     }
@@ -366,6 +414,7 @@ export function App() {
   }, [cards]);
 
   useEffect(() => {
+    // 설정도 앱 전역 상태이기 때문에 새로고침 후 복원할 수 있도록 저장한다.
     if (!canUseLocalStorage()) {
       return;
     }
@@ -374,6 +423,8 @@ export function App() {
   }, [settings]);
 
   useEffect(() => {
+    // 목록은 가볍게, 상세는 풍부하게 가져오기 위한 2단계 로딩 effect다.
+    // selectedCardBase가 바뀔 때만 해당 카드의 상세 데이터를 추가로 요청한다.
     let isActive = true;
 
     if (!selectedCardBase) {
@@ -443,6 +494,8 @@ export function App() {
   }, [detailById, selectedCardBase]);
 
   function handleNavigate(page) {
+    // 상세 페이지는 선택 카드가 없으면 의미가 없으므로,
+    // 직접 들어오려 하면 컬렉션으로 돌려보낸다.
     if (page === "detail" && !selectedCardId) {
       setCurrentPage("collection");
       return;
@@ -488,6 +541,8 @@ export function App() {
   }
 
   function handleToggleFavorite(cardId) {
+    // 즐겨찾기 변경은 카드 데이터 자체에 기록되지만,
+    // 실제로는 대시보드 KPI, 컬렉션 필터, 상세 버튼 상태까지 연쇄적으로 영향을 준다.
     let nextAction = "Updated a saved card state.";
 
     setCards((previousCards) =>
@@ -564,6 +619,7 @@ export function App() {
   }
 
   function handleResetDemo() {
+    // 설정, 필터, 선택 상태를 모두 초기화해 발표 중 언제든 기본 시연 상태로 돌아갈 수 있게 한다.
     const nextSettings = { ...DEFAULT_SETTINGS };
     const nextCards = cards.map((card) => ({
       ...card,
@@ -584,6 +640,8 @@ export function App() {
   }
 
   function handleRetryLoad() {
+    // 다시 불러오기는 catalogVersion만 증가시켜
+    // 카탈로그 로드 effect를 다시 실행시키는 단순한 방식으로 구현한다.
     setDetailById({});
     setCatalogVersion((previousValue) => previousValue + 1);
     setLastAction("Reloading the card showcase dataset.");
@@ -600,6 +658,9 @@ export function App() {
   }
 
   function handlePointerMove(event) {
+    // 포인터 위치를 0~1 범위로 정규화한 뒤,
+    // 카드 기울기와 광택 위치를 계산한다.
+    // 이 값들은 React-like 상태가 아니라 CSS 변수로만 전달된다.
     const element = event.currentTarget;
 
     if (!element || typeof element.getBoundingClientRect !== "function") {
@@ -629,6 +690,8 @@ export function App() {
   }
 
   function handlePointerLeave(event) {
+    // 커서가 카드 밖으로 나가면 시각 효과만 기본값으로 되돌린다.
+    // 앱의 데이터 상태(cards, selectedCardId 등)는 건드리지 않는다.
     const element = event.currentTarget;
 
     applyInteractiveStyle(element, {
@@ -645,6 +708,8 @@ export function App() {
   }
 
   function renderCurrentPage() {
+    // 이 함수는 상태 기반 다중 페이지 SPA의 핵심이다.
+    // 실제로는 앱을 다시 mount하지 않고, currentPage 값에 따라 다른 페이지 VNode만 선택한다.
     if (isLoading) {
       return h("section", { className: "page-stack", id: "page-loading" },
         h("article", { className: "panel-card empty-detail-card" },

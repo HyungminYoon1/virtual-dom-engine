@@ -9,6 +9,8 @@ import { SummaryCard } from "../components/SummaryCard.js";
 import { CardTile } from "../components/CardTile.js";
 
 function renderTypeSummary(items) {
+  // 요약 패널은 복잡한 그래프 대신 텍스트 리스트로도 충분히
+  // "필터된 카드 분포"를 설명할 수 있게 설계했다.
   if (items.length === 0) {
     return [h("li", { key: "empty" }, "No type data yet.")];
   }
@@ -19,6 +21,8 @@ function renderTypeSummary(items) {
 }
 
 export function DashboardPage(props) {
+  // Dashboard는 앱 전체 상태를 빠르게 요약하는 페이지다.
+  // 사용자는 여기서 "지금 데이터가 어떤 상태인지"를 먼저 이해한다.
   return h("section", { id: "page-dashboard", className: "page-stack" },
     h(PageHeader, {
       kicker: "Dashboard",

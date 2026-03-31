@@ -4,6 +4,8 @@
  */
 
 export const TYPE_LABELS = Object.freeze({
+  // 화면에서는 사람이 읽기 쉬운 라벨이 필요하므로,
+  // 데이터 값과 표시 문자열을 분리해 둔다.
   electric: "Electric",
   fire: "Fire",
   ghost: "Ghost",
@@ -25,6 +27,7 @@ export const TYPE_LABELS = Object.freeze({
 });
 
 export const PAGE_META = Object.freeze({
+  // 네비게이션과 문서 제목에 공통으로 쓰는 페이지 메타 정보다.
   dashboard: { label: "Dashboard", title: "Dashboard" },
   collection: { label: "Collection", title: "Collection" },
   detail: { label: "Detail", title: "Card Detail" },
@@ -32,6 +35,7 @@ export const PAGE_META = Object.freeze({
 });
 
 export const DEFAULT_SETTINGS = Object.freeze({
+  // 설정 페이지에서 사용자가 바꿀 수 있는 전역 옵션의 기본값이다.
   defaultPage: "dashboard",
   defaultSortMode: "number",
   tiltEnabled: true,
@@ -40,6 +44,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
 });
 
 export const CARD_LIBRARY = Object.freeze([
+  // CARD_LIBRARY는 원격 로드 실패 시에도 앱이 시연 가능하도록 남겨둔
+  // 안전한 fallback 데이터다.
   {
     id: "card-025",
     name: "Pikachu",

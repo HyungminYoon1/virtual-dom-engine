@@ -6,6 +6,8 @@
 import { h } from "../../index.js";
 
 function renderButtons(currentPage, pages, onNavigate) {
+  // 페이지 메타 정보만 받아 버튼을 만들기 때문에,
+  // 네비게이션도 완전히 stateless하게 유지된다.
   return Object.entries(pages).map(([page, meta]) =>
     h("button", {
       id: `nav-${page}`,
@@ -19,6 +21,8 @@ function renderButtons(currentPage, pages, onNavigate) {
 export function TopNavigation(props) {
   const currentMeta = props.pages[props.currentPage];
 
+  // 현재 페이지 라벨을 브랜드 영역에 함께 노출해
+  // 사용자가 지금 어느 화면에 있는지 즉시 알 수 있게 한다.
   return h("header", { className: "top-nav" },
     h("div", { className: "brand-block" },
       h("p", { className: "brand-eyebrow" }, "Prism Dex"),

@@ -30,6 +30,7 @@ const TYPE_ORDER = [
 ];
 
 function assertFetch(fetchImpl) {
+  // 네트워크 함수 주입을 허용하면 테스트에서 fetch를 쉽게 가짜로 바꿀 수 있다.
   if (typeof fetchImpl !== "function") {
     throw new Error("A fetch implementation is required to load the Pokemon catalog.");
   }
@@ -40,6 +41,8 @@ function createCardId(number) {
 }
 
 function getPokemonIdFromUrl(url) {
+  // PokeAPI 목록 응답은 id를 직접 주지 않고 URL을 주므로,
+  // 정규식으로 마지막 숫자를 뽑아 카드 번호로 사용한다.
   const match = /\/pokemon\/(\d+)\/?$/.exec(url);
   return match ? Number(match[1]) : null;
 }
@@ -52,6 +55,8 @@ function getSpriteUrls(id) {
 }
 
 function getShowcaseRarity(id, types) {
+  // 실제 카드 rarity API가 있는 것이 아니라,
+  // 시연용 쇼케이스 분위기를 위해 규칙 기반 rarity를 만든다.
   if (types.length >= 2 && id % 25 === 0) {
     return "Prismatic Rare";
   }
@@ -72,6 +77,7 @@ function sortTypes(types) {
 }
 
 async function readJson(responsePromise) {
+  // fetch와 json 파싱을 한곳에 모아두면 오류 처리를 재사용하기 쉽다.
   const response = await responsePromise;
 
   if (!response.ok) {
@@ -82,6 +88,8 @@ async function readJson(responsePromise) {
 }
 
 async function fetchTypeMap(fetchImpl) {
+  // PokeAPI의 pokemon 목록에는 타입이 직접 포함되지 않으므로,
+  // type 엔드포인트들을 읽어서 "포켓몬 id -> 타입 배열" 맵으로 미리 정리한다.
   const typeList = await readJson(fetchImpl(`${API_ROOT}/type`));
   const usableTypes = typeList.results.filter((item) => !IGNORED_TYPES.has(item.name));
   const detailResponses = await Promise.all(usableTypes.map((item) => readJson(fetchImpl(item.url))));
@@ -111,6 +119,7 @@ async function fetchTypeMap(fetchImpl) {
 }
 
 function normalizeName(name) {
+  // PokeAPI 이름은 소문자/하이픈 기반이므로, 카드 제목처럼 읽히도록 다듬는다.
   return name
     .split("-")
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
@@ -120,6 +129,8 @@ function normalizeName(name) {
 export async function fetchPokemonCatalog(fetchImpl = globalThis.fetch) {
   assertFetch(fetchImpl);
 
+  // 초기 카탈로그는 "목록을 그리는 데 필요한 최소 정보"만 가져온다.
+  // 상세 스탯/플레이버는 Detail 페이지에서 추가 요청한다.
   const [listData, typeMap] = await Promise.all([
     readJson(fetchImpl(`${API_ROOT}/pokemon?limit=${MAX_NATIONAL_DEX}&offset=0`)),
     fetchTypeMap(fetchImpl),
@@ -168,6 +179,8 @@ function extractFlavorText(speciesData) {
 export async function fetchPokemonDetail(card, fetchImpl = globalThis.fetch) {
   assertFetch(fetchImpl);
 
+  // Detail 페이지는 선택 카드 한 장만 더 풍부하게 보여주면 되므로,
+  // pokemon + species 두 응답을 합쳐 필요한 필드만 뽑는다.
   const pokemonData = await readJson(fetchImpl(`${API_ROOT}/pokemon/${Number(card.number)}`));
   const speciesData = await readJson(fetchImpl(pokemonData.species.url));
 

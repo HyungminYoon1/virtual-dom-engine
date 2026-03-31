@@ -9,6 +9,7 @@ import { SummaryCard } from "../components/SummaryCard.js";
 import { CardShowcase } from "../components/CardShowcase.js";
 
 function getBaseStatTotal(card) {
+  // 개별 스탯 여섯 개를 합친 총합은 상세 페이지의 핵심 요약 지표다.
   if (!card.baseStats) {
     return null;
   }
@@ -17,6 +18,7 @@ function getBaseStatTotal(card) {
 }
 
 function renderBaseStatRows(card) {
+  // 숫자만 나열하면 읽기 어려우므로, 각 스탯을 label/value 쌍으로 바꿔 렌더한다.
   if (!card.baseStats) {
     return [];
   }
@@ -57,6 +59,8 @@ function renderRelatedCards(cards, onSelect) {
 }
 
 export function DetailPage(props) {
+  // DetailPage는 선택 카드 한 장만 집중해서 보여주는 페이지다.
+  // 목록 페이지와 달리 "몰입감"과 "정보 밀도"를 동시에 담당한다.
   const baseStatTotal = props.card ? getBaseStatTotal(props.card) : null;
 
   if (!props.card) {
@@ -136,6 +140,8 @@ export function DetailPage(props) {
             h("li", { id: "detail-stat-weight" }, `Weight · ${props.card.weight}kg`)
           ),
           props.card.baseStats
+            // HP 하나만 떼어 보여주지 않고 여섯 개 종족값 전체를 한곳에 모아
+            // 상세 정보가 더 일관되게 보이도록 구성했다.
             ? h("div", { className: "detail-base-stats-block" },
               h("h3", { className: "detail-subtitle" }, "Species Base Stats"),
               h("ul", { id: "detail-base-stats", className: "detail-base-stats-list" }, ...renderBaseStatRows(props.card))

@@ -6,6 +6,7 @@
 import { h } from "../../index.js";
 
 function renderTypeBadges(types) {
+  // 타입 뱃지는 카드 데이터 배열을 사람이 빠르게 읽을 수 있는 작은 UI 조각으로 바꾼다.
   return types.map((type) =>
     h("span", {
       key: type,
@@ -28,6 +29,8 @@ export function CardTile(props) {
     onMousemove: props.onPointerMove ? (event) => props.onPointerMove(event, card.id) : undefined,
     onMouseleave: props.onPointerLeave ? (event) => props.onPointerLeave(event, card.id) : undefined,
   },
+    // 카드 전체를 누르면 상세 페이지로 가고,
+    // 즐겨찾기 버튼은 별도 액션으로 분리해 실제 서비스처럼 역할을 나눈다.
     h("button", {
       id: props.openId ?? `card-open-${card.id}`,
       className: "card-visual-button",

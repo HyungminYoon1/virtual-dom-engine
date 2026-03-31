@@ -9,6 +9,8 @@ import { CollectionToolbar } from "../components/CollectionToolbar.js";
 import { CardTile } from "../components/CardTile.js";
 
 function renderCards(props) {
+  // 빈 결과 상태를 별도로 처리해 검색/필터 결과가 0개일 때도
+  // 사용자가 앱이 고장났다고 느끼지 않게 한다.
   if (props.cards.length === 0) {
     return [h("p", { id: "collection-empty-state", className: "empty-state" }, props.emptyMessage)];
   }
@@ -30,6 +32,8 @@ function renderCards(props) {
 }
 
 export function CollectionPage(props) {
+  // CollectionPage는 카드 앱의 작업 중심 화면이다.
+  // 검색, 필터, 정렬, 선택, 즐겨찾기 변경이 모두 여기서 자주 일어난다.
   return h("section", { id: "page-collection", className: "page-stack" },
     h(PageHeader, {
       kicker: "Collection",
