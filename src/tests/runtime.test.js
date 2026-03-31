@@ -403,6 +403,72 @@ export async function runRuntimeTests() {
         throw new Error("Expected click/submit/focus/blur events to update state.");
       }
     }),
+    runCase("keydown events are wired through the renderer", () => {
+      const root = document.createElement("div");
+
+      function App() {
+        const [count, setCount] = useState(0);
+
+        return h("section", null,
+          h("input", {
+            value: String(count),
+            onKeydown: () => setCount((prev) => prev + 1),
+          }),
+          h("p", null, String(count))
+        );
+      }
+
+      createApp({ root, component: App }).mount();
+
+      const input = root.querySelector("input");
+      const summary = root.querySelector("p");
+      input.dispatchEvent(new Event("keydown", { bubbles: true }));
+      input.dispatchEvent(new Event("keydown", { bubbles: true }));
+
+      if (summary.textContent !== "2") {
+        throw new Error("Expected keydown events to update state.");
+      }
+    }),
+    runCase("multiple effects keep cleanup and commit order stable", () => {
+      const root = document.createElement("div");
+      const lifecycle = [];
+      let setStep = null;
+
+      function App() {
+        const [step, updateStep] = useState(0);
+        setStep = updateStep;
+
+        useEffect(() => {
+          lifecycle.push(`effect:A:${step}`);
+          return () => {
+            lifecycle.push(`cleanup:A:${step}`);
+          };
+        }, [step]);
+
+        useEffect(() => {
+          lifecycle.push(`effect:B:${step}`);
+          return () => {
+            lifecycle.push(`cleanup:B:${step}`);
+          };
+        }, [step]);
+
+        return h("div", null, String(step));
+      }
+
+      const app = createApp({ root, component: App });
+      app.mount();
+      setStep(1);
+      app.unmount();
+
+      const joined = lifecycle.join(",");
+
+      if (
+        joined !==
+        "effect:A:0,effect:B:0,cleanup:A:0,effect:A:1,cleanup:B:0,effect:B:1,cleanup:A:1,cleanup:B:1"
+      ) {
+        throw new Error(`Unexpected multiple effect ordering: ${joined}`);
+      }
+    }),
     runCase("keyed list reorder updates DOM order", () => {
       const root = document.createElement("div");
 
