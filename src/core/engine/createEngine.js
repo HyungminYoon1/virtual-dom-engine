@@ -2,6 +2,11 @@
  * Responsibility:
  * - 외부 공개 facade인 engine 인스턴스를 생성한다.
  * - current vnode, history, diff mode, DOM 동기화를 하나의 객체로 묶는다.
+ *
+ * Easy explanation:
+ * - 이 파일은 저수준 Virtual DOM 엔진 자체를 만든다.
+ * - v3에서는 FunctionComponent가 더 상위 개념이지만,
+ *   실제 diff/patch/history는 여전히 이 엔진이 담당한다.
  */
 
 import { DIFF_MODES } from "../shared/constants.js";

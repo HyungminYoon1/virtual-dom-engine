@@ -5,6 +5,10 @@
  *
  * Relationships:
  * - engine.patch(), tests, diff 설명 문서가 이 함수 계약을 기준으로 한다.
+ *
+ * Easy explanation:
+ * - diff는 이전 화면 설명서와 새 화면 설명서를 비교해서,
+ *   정확히 무엇을 바꾸면 되는지 patch 목록으로 계산한다.
  */
 
 import { DIFF_MODES, PATCH_TYPES } from "../shared/constants.js";

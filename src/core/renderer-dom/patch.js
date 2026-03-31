@@ -2,6 +2,10 @@
  * Responsibility:
  * - flat patch list를 실제 DOM에 적용한다.
  * - path 기반 대상 탐색, DOM 교체/이동/속성 반영을 담당한다.
+ *
+ * Easy explanation:
+ * - diff가 계산한 patch 목록을 실제 DOM 조작으로 옮기는 마지막 단계다.
+ * - 즉, "무엇을 바꿀까"가 diff라면, "실제로 바꾸기"는 patch다.
  */
 
 import { PATCH_TYPES } from "../reconciler/patchTypes.js";

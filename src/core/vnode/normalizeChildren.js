@@ -5,6 +5,10 @@
  *
  * Relationships:
  * - vnode/h.js에서 직접 사용한다.
+ *
+ * Easy explanation:
+ * - children에는 문자열, 숫자, 배열, null, false가 섞여 들어올 수 있다.
+ * - 이후 단계가 단순해지도록 여기서 모두 "표준 children 배열"로 맞춘다.
  */
 
 import { createTextVNode } from "./index.js";

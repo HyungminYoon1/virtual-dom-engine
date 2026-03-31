@@ -1,6 +1,10 @@
 /*
  * Responsibility:
  * - DOM 반영 이후 실행되는 effect Hook을 제공한다.
+ *
+ * Easy explanation:
+ * - useEffect는 "화면이 그려진 뒤에 실행할 일"을 등록하는 Hook이다.
+ * - 예를 들면 document.title 변경, localStorage 저장, 로그 출력 같은 후처리가 여기에 들어간다.
  */
 
 import { assertActiveDispatcher } from "../assertActiveDispatcher.js";

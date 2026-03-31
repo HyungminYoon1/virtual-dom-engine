@@ -9,6 +9,10 @@
  *
  * Relationships:
  * - h(), domToVNode(), diff, renderer가 모두 이 shape를 전제로 동작한다.
+ *
+ * Easy explanation:
+ * - VNode 구조가 프로젝트 전체에서 같아야 diff와 renderer가 제대로 협업할 수 있다.
+ * - 이 파일은 "표준 VNode 모양"을 만드는 공장이다.
  */
 
 import { NODE_TYPES } from "../shared/constants.js";

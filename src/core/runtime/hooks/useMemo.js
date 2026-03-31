@@ -1,6 +1,10 @@
 /*
  * Responsibility:
  * - dependency 기반 계산값 캐시 Hook을 제공한다.
+ *
+ * Easy explanation:
+ * - useMemo는 반복 계산을 줄이기 위한 캐시다.
+ * - 이전에 계산한 값이 아직 유효하면 다시 계산하지 않고 그대로 재사용한다.
  */
 
 import { assertActiveDispatcher } from "../assertActiveDispatcher.js";

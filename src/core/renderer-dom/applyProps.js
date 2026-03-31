@@ -2,6 +2,11 @@
  * Responsibility:
  * - DOM element에 일반 prop/property를 반영한다.
  * - boolean prop, className, value 계열 같은 DOM 특수 케이스를 처리한다.
+ *
+ * Easy explanation:
+ * - DOM의 속성은 전부 똑같이 다룰 수 없다.
+ * - 예를 들어 className, checked, value는 일반 문자열 attribute와 다르게 다뤄야 한다.
+ * - 이 파일은 그런 DOM 특수 규칙을 담당한다.
  */
 
 import { BOOLEAN_PROPS } from "../shared/constants.js";

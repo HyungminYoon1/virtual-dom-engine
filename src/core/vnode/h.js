@@ -5,6 +5,10 @@
  *
  * Relationships:
  * - samples, tests, future JSX-like entrypoint가 이 함수를 사용한다.
+ *
+ * Easy explanation:
+ * - h()는 실제 DOM을 만드는 함수가 아니다.
+ * - "이런 화면을 그리고 싶다"는 구조를 JS 객체(VNode)로 설명하는 함수다.
  */
 
 import { createElementVNode } from "./index.js";

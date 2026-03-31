@@ -2,6 +2,10 @@
  * Responsibility:
  * - VNode events 객체를 실제 DOM 리스너로 연결/교체/제거한다.
  * - 동일 노드에 리스너가 중복 등록되지 않도록 내부 저장소를 유지한다.
+ *
+ * Easy explanation:
+ * - 이전 렌더의 onClick과 새 렌더의 onClick이 다르면, DOM 리스너도 바꿔야 한다.
+ * - 이 파일은 그 교체/제거 작업을 안전하게 처리한다.
  */
 
 import { LISTENER_STORE } from "../shared/constants.js";
