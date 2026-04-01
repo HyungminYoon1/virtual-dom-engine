@@ -38,6 +38,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // 설정 페이지에서 사용자가 바꿀 수 있는 전역 옵션의 기본값이다.
   defaultPage: "dashboard",
   defaultSortMode: "number",
+  locale: "en",
   tiltEnabled: true,
   glareEnabled: true,
   highResImage: true,

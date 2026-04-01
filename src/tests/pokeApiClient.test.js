@@ -3,7 +3,11 @@
  * - PokeAPI 클라이언트가 정규 전국도감 범위만 카탈로그에 포함하는지 검증한다.
  */
 
-import { fetchPokemonCatalog, fetchPokemonPreviewCatalog } from "../app/data/pokeApiClient.js";
+import {
+  fetchPokemonCatalog,
+  fetchPokemonLocalizedNames,
+  fetchPokemonPreviewCatalog,
+} from "../app/data/pokeApiClient.js";
 
 async function runCase(name, fn) {
   try {
@@ -126,6 +130,43 @@ export async function runPokeApiClientTests() {
 
       if (!fetchCalls.some((url) => url.includes("/pokemon?limit=10&offset=0"))) {
         throw new Error("Expected the preview catalog to request only the initial batch.");
+      }
+    }),
+    await runCase("fetchPokemonLocalizedNames resolves supported locale names with fallback priority", async () => {
+      const fetchMock = (url) => {
+        if (url.endsWith("/pokemon-species/25")) {
+          return createJsonResponse({
+            name: "pikachu",
+            names: [
+              { language: { name: "en" }, name: "Pikachu" },
+              { language: { name: "ko" }, name: "피카츄" },
+              { language: { name: "ja-Hrkt" }, name: "ピカチュウ" },
+              { language: { name: "zh-Hant" }, name: "皮卡丘" },
+              { language: { name: "es" }, name: "Pikachu" },
+            ],
+          });
+        }
+
+        if (url.endsWith("/pokemon-species/6")) {
+          return createJsonResponse({
+            name: "charizard",
+            names: [
+              { language: { name: "en" }, name: "Charizard" },
+            ],
+          });
+        }
+
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      };
+
+      const localizedNames = await fetchPokemonLocalizedNames(["025", "006"], "ko", fetchMock);
+
+      if (localizedNames["025"] !== "피카츄") {
+        throw new Error(`Expected Korean species name for #025, received ${localizedNames["025"]}.`);
+      }
+
+      if (localizedNames["006"] !== "Charizard") {
+        throw new Error(`Expected English fallback for #006, received ${localizedNames["006"]}.`);
       }
     }),
   ];

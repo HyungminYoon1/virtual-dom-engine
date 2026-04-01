@@ -1,38 +1,42 @@
 /*
  * Responsibility:
- * - 카드 서비스 전역 설정과 데모 초기화 옵션을 렌더링한다.
+ * - 카드 서비스의 전역 설정과 데모 초기화 옵션을 렌더링한다.
  */
 
 import { h } from "../../index.js";
+import { LANGUAGE_OPTIONS } from "../i18n/messages.js";
 import { PageHeader } from "../components/PageHeader.js";
 
 function renderPageOptions(pages) {
-  // detail은 카드 선택이 있어야 의미가 있으므로 기본 시작 페이지 후보에서는 제외한다.
   return Object.entries(pages)
     .filter(([page]) => page !== "detail")
     .map(([page, meta]) => h("option", { key: page, value: page }, meta.label));
 }
 
-function renderSortOptions() {
+function renderSortOptions(sortOptions) {
   return [
-    h("option", { key: "number", value: "number" }, "Number"),
-    h("option", { key: "name", value: "name" }, "Name"),
-    h("option", { key: "favorites", value: "favorites" }, "Favorites First"),
+    h("option", { key: "number", value: "number" }, sortOptions.number),
+    h("option", { key: "name", value: "name" }, sortOptions.name),
+    h("option", { key: "favorites", value: "favorites" }, sortOptions.favorites),
   ];
 }
 
+function renderLanguageOptions() {
+  return LANGUAGE_OPTIONS.map((option) =>
+    h("option", { key: option.value, value: option.value }, option.label)
+  );
+}
+
 export function SettingsPage(props) {
-  // SettingsPage도 상태를 직접 만들지 않는다.
-  // 모든 설정 값은 루트 App이 소유하고, 이 페이지는 입력 UI만 렌더한다.
   return h("section", { id: "page-settings", className: "page-stack" },
     h(PageHeader, {
-      kicker: "Settings",
-      title: "Showcase Settings",
-      description: "Tune the demo behavior and runtime presentation without leaving the single root app.",
+      kicker: props.copy.settings.kicker,
+      title: props.copy.settings.title,
+      description: props.copy.settings.description,
       actions: [
         {
           id: "settings-reset-demo",
-          label: "Reset Showcase",
+          label: props.copy.settings.resetShowcase,
           onClick: props.onResetDemo,
         },
       ],
@@ -40,11 +44,11 @@ export function SettingsPage(props) {
     h("section", { className: "settings-grid" },
       h("article", { className: "panel-card" },
         h("div", { className: "panel-heading" },
-          h("h2", null, "Default View"),
-          h("p", null, "Choose the first page shown when the app starts.")
+          h("h2", null, props.copy.settings.defaultView),
+          h("p", null, props.copy.settings.defaultViewDescription)
         ),
         h("label", { className: "field" },
-          h("span", { className: "field-label" }, "Default Page"),
+          h("span", { className: "field-label" }, props.copy.settings.defaultPage),
           h("select", {
             id: "settings-default-page",
             value: props.settings.defaultPage,
@@ -54,22 +58,36 @@ export function SettingsPage(props) {
       ),
       h("article", { className: "panel-card" },
         h("div", { className: "panel-heading" },
-          h("h2", null, "Collection Sorting"),
-          h("p", null, "Apply a default sorting strategy for the gallery page.")
+          h("h2", null, props.copy.settings.collectionSorting),
+          h("p", null, props.copy.settings.collectionSortingDescription)
         ),
         h("label", { className: "field" },
-          h("span", { className: "field-label" }, "Default Sort"),
+          h("span", { className: "field-label" }, props.copy.settings.defaultSort),
           h("select", {
             id: "settings-default-sort",
             value: props.settings.defaultSortMode,
             onChange: props.onDefaultSortChange,
-          }, ...renderSortOptions())
+          }, ...renderSortOptions(props.copy.sortOptions))
         )
       ),
       h("article", { className: "panel-card" },
         h("div", { className: "panel-heading" },
-          h("h2", null, "Card Motion"),
-          h("p", null, "Toggle the card-local 3D tilt and glare effects without changing the global app state model.")
+          h("h2", null, props.copy.settings.languageTitle),
+          h("p", null, props.copy.settings.languageDescription)
+        ),
+        h("label", { className: "field" },
+          h("span", { className: "field-label" }, props.copy.settings.languageLabel),
+          h("select", {
+            id: "settings-language-select",
+            value: props.settings.locale,
+            onChange: props.onLocaleChange,
+          }, ...renderLanguageOptions())
+        )
+      ),
+      h("article", { className: "panel-card" },
+        h("div", { className: "panel-heading" },
+          h("h2", null, props.copy.settings.cardMotion),
+          h("p", null, props.copy.settings.cardMotionDescription)
         ),
         h("label", { className: "checkbox-field" },
           h("input", {
@@ -78,7 +96,7 @@ export function SettingsPage(props) {
             checked: props.settings.tiltEnabled,
             onChange: props.onTiltToggle,
           }),
-          h("span", null, props.settings.tiltEnabled ? "Tilt enabled" : "Tilt disabled")
+          h("span", null, props.settings.tiltEnabled ? props.copy.settings.tiltEnabled : props.copy.settings.tiltDisabled)
         ),
         h("label", { className: "checkbox-field" },
           h("input", {
@@ -87,7 +105,7 @@ export function SettingsPage(props) {
             checked: props.settings.glareEnabled,
             onChange: props.onGlareToggle,
           }),
-          h("span", null, props.settings.glareEnabled ? "Glare enabled" : "Glare disabled")
+          h("span", null, props.settings.glareEnabled ? props.copy.settings.glareEnabled : props.copy.settings.glareDisabled)
         ),
         h("label", { className: "checkbox-field" },
           h("input", {
@@ -96,20 +114,17 @@ export function SettingsPage(props) {
             checked: props.settings.highResImage,
             onChange: props.onHighResToggle,
           }),
-          h("span", null, props.settings.highResImage ? "High-res art enabled" : "Thumbnail mode enabled")
+          h("span", null, props.settings.highResImage ? props.copy.settings.highResEnabled : props.copy.settings.highResDisabled)
         )
       )
     ),
     h("article", { className: "panel-card runtime-info-card" },
       h("div", { className: "panel-heading" },
-        h("h2", null, "Runtime Notes"),
-        h("p", null, "The app still uses one root component. Only card-local motion effects escape the normal state/render loop.")
+        h("h2", null, props.copy.settings.runtimeNotes),
+        h("p", null, props.copy.settings.runtimeNotesDescription)
       ),
       h("ul", { className: "insight-list" },
-        h("li", null, "Single mount on #app"),
-        h("li", null, "State-based multi-page navigation"),
-        h("li", null, "Tilt and glare handled as local DOM presentation effects"),
-        h("li", null, "Favorites and settings persisted through localStorage")
+        ...props.copy.settings.runtimeNoteItems.map((item, index) => h("li", { key: `runtime-note-${index}` }, item))
       )
     )
   );

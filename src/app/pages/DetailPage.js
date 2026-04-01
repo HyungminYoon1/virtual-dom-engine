@@ -1,6 +1,6 @@
 /*
  * Responsibility:
- * - 선택된 카드 한 장을 중심으로 렌더링하는 상세 페이지를 담당한다.
+ * - 선택된 카드의 세부 정보를 중심으로 렌더링하는 상세 페이지를 담당한다.
  */
 
 import { h } from "../../index.js";
@@ -9,7 +9,6 @@ import { SummaryCard } from "../components/SummaryCard.js";
 import { CardShowcase } from "../components/CardShowcase.js";
 
 function getBaseStatTotal(card) {
-  // 개별 스탯 여섯 개를 합친 총합은 상세 페이지의 핵심 요약 지표다.
   if (!card.baseStats) {
     return null;
   }
@@ -18,7 +17,6 @@ function getBaseStatTotal(card) {
 }
 
 function renderBaseStatRows(card) {
-  // 숫자만 나열하면 읽기 어려우므로, 각 스탯을 label/value 쌍으로 바꿔 렌더한다.
   if (!card.baseStats) {
     return [];
   }
@@ -41,9 +39,9 @@ function renderBaseStatRows(card) {
   );
 }
 
-function renderTypeBadges(types) {
+function renderTypeBadges(types, typeLabels) {
   return types.map((type) =>
-    h("span", { key: type, className: `type-chip type-chip-${type}` }, type)
+    h("span", { key: type, className: `type-chip type-chip-${type}` }, typeLabels[type] ?? type)
   );
 }
 
@@ -54,15 +52,17 @@ function renderRelatedCards(cards, onSelect) {
       id: `detail-related-${card.id}`,
       className: "related-card-button",
       onClick: () => onSelect(card.id),
-    }, card.name)
+    }, card.displayName ?? card.name)
   );
 }
 
-function renderSpritePreview(card) {
+function renderSpritePreview(card, copy) {
+  const displayName = card.displayName ?? card.name;
+
   return h("article", { className: "panel-card sprite-preview-card", id: "detail-sprite-preview" },
     h("div", { className: "panel-heading" },
-      h("h2", null, "Game Sprite Card"),
-      h("p", null, "A smaller low-resolution texture card keeps the detail page grounded and makes the artwork mode change easier to compare.")
+      h("h2", null, copy.detail.gameSpriteCard),
+      h("p", null, copy.detail.gameSpriteDescription)
     ),
     h("div", { className: "sprite-preview-shell" },
       h("div", { className: "sprite-preview-card-frame" },
@@ -70,11 +70,11 @@ function renderSpritePreview(card) {
           id: "detail-sprite-image",
           className: "detail-sprite-image",
           src: card.thumbUrl,
-          alt: `${card.name} game sprite`,
+          alt: `${displayName} game sprite`,
         }),
         h("div", { className: "sprite-preview-caption" },
-          h("strong", { className: "sprite-preview-title" }, card.name),
-          h("span", { className: "sprite-preview-meta" }, "Retro game texture")
+          h("strong", { className: "sprite-preview-title" }, displayName),
+          h("span", { className: "sprite-preview-meta" }, copy.detail.retroTexture)
         )
       )
     )
@@ -82,39 +82,37 @@ function renderSpritePreview(card) {
 }
 
 export function DetailPage(props) {
-  // DetailPage는 선택 카드 한 장만 집중해서 보여주는 페이지다.
-  // 목록 페이지와 달리 "몰입감"과 "정보 밀도"를 동시에 담당한다.
   const baseStatTotal = props.card ? getBaseStatTotal(props.card) : null;
 
   if (!props.card) {
     return h("section", { id: "page-detail", className: "page-stack" },
       h(PageHeader, {
-        kicker: "Detail",
-        title: "No Card Selected",
-        description: "Pick a card from the collection to open the immersive showcase view.",
+        kicker: props.copy.detail.kicker,
+        title: props.copy.detail.noCardTitle,
+        description: props.copy.detail.noCardDescription,
         actions: [
           {
             id: "detail-go-collection",
-            label: "Open Collection",
+            label: props.copy.detail.openCollection,
             onClick: () => props.onNavigate("collection"),
           },
         ],
       }),
       h("article", { className: "panel-card empty-detail-card" },
-        h("p", { id: "detail-empty-state", className: "empty-state" }, "Select a card to activate the detailed showcase view.")
+        h("p", { id: "detail-empty-state", className: "empty-state" }, props.copy.detail.emptyMessage)
       )
     );
   }
 
   return h("section", { id: "page-detail", className: "page-stack" },
     h(PageHeader, {
-      kicker: "Detail",
-      title: props.card.name,
-      description: "This page combines runtime-driven data with a card-local 3D tilt and glare interaction.",
+      kicker: props.copy.detail.kicker,
+      title: props.card.displayName ?? props.card.name,
+      description: props.copy.detail.description,
       actions: [
         {
           id: "detail-back-to-collection",
-          label: "Back to Collection",
+          label: props.copy.detail.backToCollection,
           onClick: () => props.onNavigate("collection"),
           tone: "ghost",
         },
@@ -130,46 +128,44 @@ export function DetailPage(props) {
           onPointerMove: props.onPointerMove,
           onPointerLeave: props.onPointerLeave,
         }),
-        renderSpritePreview(props.card)
+        renderSpritePreview(props.card, props.copy)
       ),
       h("div", { className: "detail-side-panel" },
         h("section", { className: "detail-kpi-stack" },
           h(SummaryCard, {
             id: "detail-card-rarity",
-            label: "Rarity",
+            label: props.copy.detail.rarity,
             value: props.card.rarity,
-            help: "A quick summary value derived from the selected card record.",
+            help: props.copy.detail.rarityHelp,
           }),
           h(SummaryCard, {
             id: "detail-card-bst",
-            label: "Base Stat Total",
+            label: props.copy.detail.baseStatTotal,
             value: baseStatTotal !== null ? String(baseStatTotal) : "N/A",
-            help: "Species base stats are grouped together instead of showing HP alone.",
+            help: props.copy.detail.baseStatTotalHelp,
             tone: "warm",
           })
         ),
         h("article", { className: "panel-card detail-meta-card" },
           h("div", { className: "panel-heading" },
-            h("h2", null, "Card Metadata"),
-            h("p", null, "The detail panel reacts instantly when the selected card changes.")
+            h("h2", null, props.copy.detail.metadataTitle),
+            h("p", null, props.copy.detail.metadataDescription)
           ),
           props.isDetailLoading
-            ? h("p", { id: "detail-loading-state", className: "detail-flavor" }, "Loading full species stats from the remote catalog.")
+            ? h("p", { id: "detail-loading-state", className: "detail-flavor" }, props.copy.detail.loadingSpeciesStats)
             : null,
           props.detailError
             ? h("p", { id: "detail-error-state", className: "detail-flavor" }, props.detailError)
             : null,
-          h("div", { id: "detail-card-types", className: "card-type-row detail-type-row" }, ...renderTypeBadges(props.card.types)),
+          h("div", { id: "detail-card-types", className: "card-type-row detail-type-row" }, ...renderTypeBadges(props.card.types, props.typeLabels)),
           h("ul", { className: "insight-list detail-stat-list" },
-            h("li", { id: "detail-stat-number" }, `Number · ${props.card.number}`),
-            h("li", { id: "detail-stat-height" }, `Height · ${props.card.height}m`),
-            h("li", { id: "detail-stat-weight" }, `Weight · ${props.card.weight}kg`)
+            h("li", { id: "detail-stat-number" }, `${props.copy.detail.number} · ${props.card.number}`),
+            h("li", { id: "detail-stat-height" }, `${props.copy.detail.height} · ${props.card.height}m`),
+            h("li", { id: "detail-stat-weight" }, `${props.copy.detail.weight} · ${props.card.weight}kg`)
           ),
           props.card.baseStats
-            // HP 하나만 떼어 보여주지 않고 여섯 개 종족값 전체를 한곳에 모아
-            // 상세 정보가 더 일관되게 보이도록 구성했다.
             ? h("div", { className: "detail-base-stats-block" },
-              h("h3", { className: "detail-subtitle" }, "Species Base Stats"),
+              h("h3", { className: "detail-subtitle" }, props.copy.detail.speciesBaseStats),
               h("ul", { id: "detail-base-stats", className: "detail-base-stats-list" }, ...renderBaseStatRows(props.card))
             )
             : null,
@@ -179,18 +175,18 @@ export function DetailPage(props) {
               id: `detail-favorite-${props.card.id}`,
               className: props.card.isFavorite ? "primary-button" : "secondary-button",
               onClick: () => props.onToggleFavorite(props.card.id),
-            }, props.card.isFavorite ? "Remove from Saved" : "Save to Favorites"),
+            }, props.card.isFavorite ? props.copy.common.removeFromSaved : props.copy.common.saveToFavorites),
             h("button", {
               id: "detail-next-card",
               className: "ghost-button",
               onClick: props.onSelectNext,
-            }, "Next Card")
+            }, props.copy.common.nextCard)
           )
         ),
         h("article", { className: "panel-card" },
           h("div", { className: "panel-heading" },
-            h("h2", null, "Related Cards"),
-            h("p", null, "Quick links let the runtime swap the selected card without remounting the app.")
+            h("h2", null, props.copy.detail.relatedCards),
+            h("p", null, props.copy.detail.relatedDescription)
           ),
           h("div", { id: "detail-related-list", className: "related-card-row" }, ...renderRelatedCards(props.relatedCards, props.onSelectCard))
         )

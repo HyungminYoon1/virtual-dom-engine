@@ -4,8 +4,15 @@
  */
 
 import { h, useEffect, useMemo, useState } from "../index.js";
-import { CARD_LIBRARY, DEFAULT_SETTINGS, PAGE_META, TYPE_LABELS } from "./data/cardLibrary.js";
-import { fetchPokemonCatalog, fetchPokemonDetail, fetchPokemonPreviewCatalog } from "./data/pokeApiClient.js";
+import { CARD_LIBRARY, DEFAULT_SETTINGS, PAGE_META } from "./data/cardLibrary.js";
+import {
+  fetchPokemonCatalog,
+  fetchPokemonDetail,
+  fetchPokemonLocalizedNames,
+  fetchPokemonPreviewCatalog,
+} from "./data/pokeApiClient.js";
+import { getLocalPokemonName } from "./data/pokemon-names/index.js";
+import { getLocaleMessages, LANGUAGE_OPTIONS, resolveSupportedLocale } from "./i18n/messages.js";
 import { AppShell } from "./components/AppShell.js";
 import { DashboardPage } from "./pages/DashboardPage.js";
 import { CollectionPage } from "./pages/CollectionPage.js";
@@ -41,6 +48,18 @@ function cloneDefaultCards() {
   }));
 }
 
+function resolveBrowserLocale() {
+  if (typeof globalThis.__CARD_SHOWCASE_LOCALE__ === "string") {
+    return resolveSupportedLocale(globalThis.__CARD_SHOWCASE_LOCALE__);
+  }
+
+  if (typeof navigator === "undefined") {
+    return DEFAULT_SETTINGS.locale;
+  }
+
+  return resolveSupportedLocale([navigator.language, ...(navigator.languages ?? [])]);
+}
+
 function readStoredJson(key) {
   // localStorage 파싱 실패는 사용자 데이터 손상이나 브라우저 정책으로 쉽게
   // 생길 수 있다. 여기서는 예외를 밖으로 던지지 않고 "없음"으로 취급한다.
@@ -62,12 +81,16 @@ function parseStoredSettings() {
   const parsed = readStoredJson("card-showcase-settings");
 
   if (!parsed || typeof parsed !== "object") {
-    return { ...DEFAULT_SETTINGS };
+    return {
+      ...DEFAULT_SETTINGS,
+      locale: resolveBrowserLocale(),
+    };
   }
 
   return {
     defaultPage: parsed.defaultPage ?? DEFAULT_SETTINGS.defaultPage,
     defaultSortMode: parsed.defaultSortMode ?? DEFAULT_SETTINGS.defaultSortMode,
+    locale: resolveSupportedLocale(parsed.locale ?? resolveBrowserLocale()),
     tiltEnabled: parsed.tiltEnabled ?? DEFAULT_SETTINGS.tiltEnabled,
     glareEnabled: parsed.glareEnabled ?? DEFAULT_SETTINGS.glareEnabled,
     highResImage: parsed.highResImage ?? DEFAULT_SETTINGS.highResImage,
@@ -138,21 +161,24 @@ function mergeFavoriteFlags(cards, favoriteIds) {
   }));
 }
 
-function createPageItems(pages) {
+function createPageItems(pages, localizedPages) {
   // AppShell과 네비게이션은 전체 PAGE_META가 아니라,
   // label만 있는 단순 구조면 충분하므로 표시용 데이터만 추린다.
   return Object.keys(pages).reduce((result, page) => {
-    result[page] = { label: pages[page].label };
+    result[page] = {
+      label: localizedPages?.[page]?.label ?? pages[page].label,
+      title: localizedPages?.[page]?.title ?? pages[page].title,
+    };
     return result;
   }, {});
 }
 
-function createCatalogStatusMessage(loadedCount, isStreamingCatalog) {
+function createCatalogStatusMessage(copy, loadedCount, isStreamingCatalog) {
   if (isStreamingCatalog) {
-    return `Showing the first ${loadedCount} cards while the full national catalog streams in.`;
+    return copy.actions.previewLoaded(loadedCount);
   }
 
-  return `Loaded ${loadedCount} cards into the showcase.`;
+  return copy.actions.catalogLoaded(loadedCount);
 }
 
 function resolveCollectionColumnCount(width) {
@@ -175,14 +201,14 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-function sortCards(cards, sortMode) {
+function sortCards(cards, sortMode, locale) {
   // 정렬은 원본 배열을 직접 바꾸지 않도록 항상 복사본에서 수행한다.
   // 그래야 useMemo와 상태 비교가 더 예측 가능해진다.
   const nextCards = cards.slice();
 
   nextCards.sort((left, right) => {
     if (sortMode === "name") {
-      return left.name.localeCompare(right.name, "en");
+      return (left.displayName ?? left.name).localeCompare((right.displayName ?? right.name), locale);
     }
 
     if (sortMode === "favorites") {
@@ -217,14 +243,14 @@ function filterCards(cards, filters) {
       return true;
     }
 
-    return `${card.name} ${card.number}`.toLowerCase().includes(normalizedKeyword);
+    return `${card.displayName ?? card.name} ${card.name} ${card.number}`.toLowerCase().includes(normalizedKeyword);
   });
 }
 
-function buildTypeSummary(cards) {
+function buildTypeSummary(cards, typeLabels) {
   // 대시보드 요약 패널은 cards 전체가 아니라 "현재 보이는 카드"를 기준으로
   // 계산해야 사용자가 필터 결과와 요약 수치를 함께 이해할 수 있다.
-  return Object.entries(TYPE_LABELS)
+  return Object.entries(typeLabels)
     .map(([type, label]) => ({
       type,
       label,
@@ -238,11 +264,10 @@ function resolveTopTypeMessage(typeSummary) {
   // 대시보드 설명 문구도 파생 데이터다.
   // 미리 문자열로 만들어 두면 페이지 컴포넌트는 렌더링 역할에만 집중할 수 있다.
   if (typeSummary.length === 0) {
-    return "Type insight will appear as soon as cards are available.";
+    return null;
   }
 
-  const leader = typeSummary[0];
-  return `${leader.label} leads the collection with ${leader.count} visible cards.`;
+  return typeSummary[0];
 }
 
 function getCardIndex(cards, selectedCardId) {
@@ -302,6 +327,33 @@ function createLocalDetail(card) {
   };
 }
 
+function readCardIdFromEvent(event) {
+  return event?.currentTarget?.getAttribute?.("data-card-id") ?? null;
+}
+
+function readCardNameFromEvent(event) {
+  return event?.currentTarget?.getAttribute?.("data-card-name") ?? null;
+}
+
+function resolveCardDisplayName(card, locale, localizedNamesByLocale) {
+  if (!card) {
+    return "";
+  }
+
+  return (
+    getLocalPokemonName(locale, card.number)
+    ?? localizedNamesByLocale?.[locale]?.[card.number]
+    ?? card.name
+  );
+}
+
+function withDisplayName(card, locale, localizedNamesByLocale) {
+  return {
+    ...card,
+    displayName: resolveCardDisplayName(card, locale, localizedNamesByLocale),
+  };
+}
+
 export function App(props = {}) {
   // App은 문서에서 정의한 "단일 루트 상태 저장소" 역할을 그대로 수행한다.
   // 여기 있는 상태가 대시보드, 컬렉션, 상세, 설정 페이지 전체를 움직인다.
@@ -316,33 +368,51 @@ export function App(props = {}) {
   const [typeFilter, setTypeFilter] = useState("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [sortMode, setSortMode] = useState(() => initialSettings.defaultSortMode ?? "number");
-  const [lastAction, setLastAction] = useState("Loading the card showcase library.");
+  const [lastAction, setLastAction] = useState(() => getLocaleMessages(initialSettings.locale).actions.loadingLibrary);
   const [catalogVersion, setCatalogVersion] = useState(0);
   const [detailById, setDetailById] = useState({});
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState(null);
   const [catalogNotice, setCatalogNotice] = useState(null);
   const [isStreamingCatalog, setIsStreamingCatalog] = useState(false);
+  const [localizedNamesByLocale, setLocalizedNamesByLocale] = useState({});
   const [collectionViewport, setCollectionViewport] = useState({
     scrollTop: 0,
     viewportHeight: COLLECTION_FALLBACK_VIEWPORT_HEIGHT,
     viewportWidth: COLLECTION_FALLBACK_VIEWPORT_WIDTH,
   });
 
-  const pageItems = useMemo(() => createPageItems(PAGE_META), []);
+  const copy = useMemo(() => getLocaleMessages(settings.locale), [settings.locale]);
+  const pageItems = useMemo(() => createPageItems(PAGE_META, copy.pages), [copy.pages]);
+  const typeLabels = useMemo(() => copy.typeLabels, [copy.typeLabels]);
+  const localizedCards = useMemo(
+    () => cards.map((card) => withDisplayName(card, settings.locale, localizedNamesByLocale)),
+    [cards, localizedNamesByLocale, settings.locale]
+  );
   // visibleCards는 카드 앱의 핵심 파생 데이터다.
   // 검색/필터/정렬 결과를 매 렌더마다 즉석 계산하지 않고 useMemo로 캐싱한다.
-  const visibleCards = useMemo(() => sortCards(filterCards(cards, {
+  const visibleCards = useMemo(() => sortCards(filterCards(localizedCards, {
     searchKeyword,
     typeFilter,
     favoritesOnly,
-  }), sortMode), [cards, favoritesOnly, searchKeyword, sortMode, typeFilter]);
+  }), sortMode, settings.locale), [favoritesOnly, localizedCards, searchKeyword, settings.locale, sortMode, typeFilter]);
   const favoriteCount = useMemo(() => cards.filter((card) => card.isFavorite).length, [cards]);
-  const selectedCardBase = useMemo(() => cards.find((card) => card.id === selectedCardId) ?? null, [cards, selectedCardId]);
+  const selectedCardBase = useMemo(
+    () => localizedCards.find((card) => card.id === selectedCardId) ?? null,
+    [localizedCards, selectedCardId]
+  );
   const selectedCard = useMemo(() => mergeCardWithDetail(selectedCardBase, selectedCardBase ? detailById[selectedCardBase.id] : null), [detailById, selectedCardBase]);
-  const typeSummary = useMemo(() => buildTypeSummary(visibleCards), [visibleCards]);
-  const spotlightCard = useMemo(() => selectedCard ?? visibleCards[0] ?? cards[0] ?? null, [cards, selectedCard, visibleCards]);
-  const topTypeMessage = useMemo(() => resolveTopTypeMessage(typeSummary), [typeSummary]);
+  const typeSummary = useMemo(() => buildTypeSummary(visibleCards, typeLabels), [typeLabels, visibleCards]);
+  const spotlightCard = useMemo(
+    () => selectedCard ?? visibleCards[0] ?? localizedCards[0] ?? null,
+    [localizedCards, selectedCard, visibleCards]
+  );
+  const topTypeLeader = useMemo(() => resolveTopTypeMessage(typeSummary), [typeSummary]);
+  const topTypeMessage = useMemo(() => (
+    topTypeLeader
+      ? copy.dashboard.topTypeMessage(topTypeLeader.label, topTypeLeader.count)
+      : copy.dashboard.topTypeEmpty
+  ), [copy.dashboard, topTypeLeader]);
   const relatedCards = useMemo(() => {
     if (!selectedCard) {
       return visibleCards.slice(0, 3);
@@ -386,16 +456,159 @@ export function App(props = {}) {
     () => Math.max(collectionViewport.viewportHeight, collectionTotalRowCount * COLLECTION_ROW_HEIGHT),
     [collectionTotalRowCount, collectionViewport.viewportHeight]
   );
+  const collectionHandlers = useMemo(() => ({
+    onSearchInput(event) {
+      const nextKeyword = event.target.value;
+
+      setSearchKeyword(nextKeyword);
+      setLastAction(copy.actions.searching(nextKeyword));
+    },
+
+    onTypeFilterChange(event) {
+      const nextType = event.target.value;
+
+      setTypeFilter(nextType);
+      setLastAction(copy.actions.typeFilterChanged(
+        nextType === "all"
+          ? copy.toolbar.allTypes
+          : typeLabels[nextType] ?? nextType
+      ));
+    },
+
+    onFavoritesToggle(event) {
+      const nextFavoritesOnly = Boolean(event.target.checked);
+
+      setFavoritesOnly(nextFavoritesOnly);
+      setLastAction(nextFavoritesOnly ? copy.actions.favoritesOnlyOn : copy.actions.favoritesOnlyOff);
+    },
+
+    onSortChange(event) {
+      const nextSortMode = event.target.value;
+
+      setSortMode(nextSortMode);
+      setLastAction(copy.actions.sortChanged(copy.sortOptions[nextSortMode] ?? nextSortMode));
+    },
+
+    onViewportScroll(event) {
+      const target = event.currentTarget;
+
+      setCollectionViewport((previousValue) => {
+        const nextValue = {
+          scrollTop: target.scrollTop,
+          viewportHeight: target.clientHeight || previousValue.viewportHeight,
+          viewportWidth: target.clientWidth || previousValue.viewportWidth,
+        };
+
+        if (
+          previousValue.scrollTop === nextValue.scrollTop
+          && previousValue.viewportHeight === nextValue.viewportHeight
+          && previousValue.viewportWidth === nextValue.viewportWidth
+        ) {
+          return previousValue;
+        }
+
+        return nextValue;
+      });
+    },
+
+    onOpenCardClick(event) {
+      const cardId = readCardIdFromEvent(event);
+
+      if (!cardId) {
+        return;
+      }
+
+      setSelectedCardId(cardId);
+      setCurrentPage("detail");
+      setLastAction(copy.actions.selectedCard(readCardNameFromEvent(event) ?? cardId));
+    },
+
+    onFavoriteCardClick(event) {
+      const cardId = readCardIdFromEvent(event);
+
+      if (!cardId) {
+        return;
+      }
+
+      let nextAction = "Updated a saved card state.";
+
+      setCards((previousCards) =>
+        previousCards.map((card) => {
+          if (card.id !== cardId) {
+            return card;
+          }
+
+          const nextFavorite = !card.isFavorite;
+          nextAction = nextFavorite
+            ? copy.actions.savedCard(card.displayName ?? card.name)
+            : copy.actions.removedSavedCard(card.displayName ?? card.name);
+
+          return {
+            ...card,
+            isFavorite: nextFavorite,
+          };
+        })
+      );
+
+      setLastAction(nextAction);
+    },
+  }), [copy, typeLabels]);
+  const collectionPointerHandlers = useMemo(() => ({
+    onPointerMove(event) {
+      const element = event.currentTarget;
+
+      if (!element || typeof element.getBoundingClientRect !== "function") {
+        return;
+      }
+
+      const rect = element.getBoundingClientRect();
+      const relativeX = rect.width ? (event.clientX - rect.left) / rect.width : 0.5;
+      const relativeY = rect.height ? (event.clientY - rect.top) / rect.height : 0.5;
+      const rotateY = (relativeX - 0.5) * 14;
+      const rotateX = (0.5 - relativeY) * 12;
+
+      applyInteractiveStyle(element, {
+        tiltEnabled: settings.tiltEnabled,
+        glareEnabled: settings.glareEnabled,
+        rotateX,
+        rotateY,
+        glareRotation: Math.round((relativeX - 0.5) * 22),
+        surfaceShift: Math.round((relativeY - 0.5) * 12),
+        shineShiftX: Math.round((relativeX - 0.5) * 28),
+        shineShiftY: Math.round((relativeY - 0.5) * 12),
+        waveSkew: Math.round((relativeX - 0.5) * 10),
+        holoX: Math.round(relativeX * 100),
+        holoY: Math.round(relativeY * 100),
+        sparkleOpacity: (0.34 + Math.abs(relativeX - 0.5) * 0.42 + Math.abs(relativeY - 0.5) * 0.22).toFixed(3),
+      });
+    },
+
+    onPointerLeave(event) {
+      const element = event.currentTarget;
+
+      applyInteractiveStyle(element, {
+        tiltEnabled: false,
+        glareEnabled: false,
+        rotateX: 0,
+        rotateY: 0,
+        glareRotation: 0,
+        surfaceShift: 0,
+        shineShiftX: 0,
+        shineShiftY: 0,
+        waveSkew: 0,
+      });
+    },
+  }), [settings.glareEnabled, settings.tiltEnabled]);
 
   useEffect(() => {
     // 페이지 전환이 실제로 반영되고 있음을 브라우저 탭 제목에서도 보여준다.
     // 발표 때 "상태 기반 다중 페이지"를 설명하기 좋은 작은 효과다.
-    document.title = `${PAGE_META[currentPage]?.title ?? "Showcase"} · Prism Dex`;
+    document.title = `${pageItems[currentPage]?.title ?? "Showcase"} · Prism Dex`;
 
     return () => {
       document.title = "Week5 React-like Runtime";
     };
-  }, [currentPage]);
+  }, [currentPage, pageItems]);
 
   useEffect(() => {
     if (currentPage !== "collection") {
@@ -473,7 +686,7 @@ export function App(props = {}) {
           );
           setIsLoading(false);
           setIsStreamingCatalog(false);
-          setLastAction(`Loaded ${cachedCards.length} cached cards while refreshing the remote catalog.`);
+          setLastAction(copy.actions.cachedCatalogLoaded(cachedCards.length));
         }
       }
 
@@ -488,8 +701,8 @@ export function App(props = {}) {
             );
             setIsLoading(false);
             setIsStreamingCatalog(true);
-            setCatalogNotice("Opening the collection with the first 10 cards while the full national catalog loads in the background.");
-            setLastAction(createCatalogStatusMessage(previewCards.length, true));
+            setCatalogNotice(copy.notices.previewCatalog);
+            setLastAction(createCatalogStatusMessage(copy, previewCards.length, true));
           }
         }
 
@@ -509,7 +722,7 @@ export function App(props = {}) {
         setIsLoading(false);
         setIsStreamingCatalog(false);
         setCatalogNotice(null);
-        setLastAction(createCatalogStatusMessage(nextCards.length, false));
+        setLastAction(createCatalogStatusMessage(copy, nextCards.length, false));
 
         if (dataMode !== "local") {
           writeCatalogCache(remoteCards);
@@ -532,10 +745,10 @@ export function App(props = {}) {
         setLoadError(null);
         setCatalogNotice(
           cachedCatalog.length > 0
-            ? "Remote catalog refresh failed. Showing the last cached collection snapshot."
-            : "Remote catalog failed to load. Showing the built-in fallback gallery."
+            ? copy.notices.cachedCatalog
+            : copy.notices.fallbackCatalog
         );
-        setLastAction(`Remote catalog unavailable. ${error.message}`);
+        setLastAction(`${copy.errors.loadingCardsTitle}. ${error.message}`);
       }
     }
 
@@ -564,6 +777,66 @@ export function App(props = {}) {
 
     localStorage.setItem("card-showcase-settings", JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    if (getDataMode() !== "remote" || settings.locale === "en") {
+      return () => {
+        isActive = false;
+      };
+    }
+
+    const targetNumbers = Array.from(new Set([
+      ...(currentPage === "collection" ? collectionVisibleSlice.map((card) => card.number) : []),
+      ...(currentPage === "detail" && selectedCardBase ? [selectedCardBase.number] : []),
+      ...(currentPage === "dashboard" && spotlightCard ? [spotlightCard.number] : []),
+    ])).filter(Boolean);
+    const missingNumbers = targetNumbers.filter((number) => (
+      !getLocalPokemonName(settings.locale, number)
+      && !localizedNamesByLocale?.[settings.locale]?.[number]
+    ));
+
+    if (missingNumbers.length === 0) {
+      return () => {
+        isActive = false;
+      };
+    }
+
+    async function loadLocalizedNames() {
+      try {
+        const nextNames = await fetchPokemonLocalizedNames(missingNumbers, settings.locale);
+
+        if (!isActive || Object.keys(nextNames).length === 0) {
+          return;
+        }
+
+        setLocalizedNamesByLocale((previousValue) => ({
+          ...previousValue,
+          [settings.locale]: {
+            ...(previousValue[settings.locale] ?? {}),
+            ...nextNames,
+          },
+        }));
+      } catch {
+        // Species name localization is optional UI enrichment. If this request fails,
+        // the card browser can safely continue showing the English fallback names.
+      }
+    }
+
+    loadLocalizedNames();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    collectionVisibleSlice,
+    currentPage,
+    localizedNamesByLocale,
+    selectedCardBase,
+    settings.locale,
+    spotlightCard,
+  ]);
 
   useEffect(() => {
     // 목록은 가볍게, 상세는 풍부하게 가져오기 위한 2단계 로딩 effect다.
@@ -620,12 +893,12 @@ export function App(props = {}) {
         }
 
         setIsDetailLoading(false);
-        setDetailError(`Unable to load full species details for ${selectedCardBase.name}.`);
+        setDetailError(copy.errors.detailUnavailable(selectedCardBase.displayName ?? selectedCardBase.name));
         setDetailById((previousValue) => ({
           ...previousValue,
           [selectedCardBase.id]: createLocalDetail(selectedCardBase),
         }));
-        setLastAction(`Loaded ${selectedCardBase.name} with a fallback detail profile. ${error.message}`);
+        setLastAction(`${copy.actions.detailFallback(selectedCardBase.displayName ?? selectedCardBase.name)} ${error.message}`);
       }
     }
 
@@ -647,36 +920,6 @@ export function App(props = {}) {
     setCurrentPage(page);
   }
 
-  function handleSearchInput(event) {
-    setSearchKeyword(event.target.value);
-    setLastAction(`Searching collection for "${event.target.value || "all cards"}".`);
-  }
-
-  function handleTypeFilterChange(event) {
-    setTypeFilter(event.target.value);
-    setLastAction(`Type filter changed to ${event.target.value}.`);
-  }
-
-  function handleFavoritesToggle(event) {
-    setFavoritesOnly(Boolean(event.target.checked));
-    setLastAction(Boolean(event.target.checked) ? "Collection is now filtered to saved cards." : "Collection now shows all cards again.");
-  }
-
-  function handleSortChange(event) {
-    setSortMode(event.target.value);
-    setLastAction(`Collection sort changed to ${event.target.value}.`);
-  }
-
-  function handleCollectionViewportScroll(event) {
-    const target = event.currentTarget;
-
-    setCollectionViewport((previousValue) => ({
-      scrollTop: target.scrollTop,
-      viewportHeight: target.clientHeight || previousValue.viewportHeight,
-      viewportWidth: target.clientWidth || previousValue.viewportWidth,
-    }));
-  }
-
   function handleSelectCard(cardId) {
     const target = cards.find((card) => card.id === cardId);
 
@@ -685,7 +928,7 @@ export function App(props = {}) {
     }
 
     setSelectedCardId(cardId);
-    setLastAction(`Selected ${target.name} for the detail spotlight.`);
+    setLastAction(copy.actions.selectedCard(target.displayName ?? target.name));
   }
 
   function handleSelectAndOpen(cardId) {
@@ -706,8 +949,8 @@ export function App(props = {}) {
 
         const nextFavorite = !card.isFavorite;
         nextAction = nextFavorite
-          ? `Saved ${card.name} to favorites.`
-          : `Removed ${card.name} from favorites.`;
+          ? copy.actions.savedCard(resolveCardDisplayName(card, settings.locale, localizedNamesByLocale))
+          : copy.actions.removedSavedCard(resolveCardDisplayName(card, settings.locale, localizedNamesByLocale));
 
         return {
           ...card,
@@ -727,7 +970,7 @@ export function App(props = {}) {
       defaultPage: nextPage,
     }));
     setCurrentPage(nextPage);
-    setLastAction(`Default page changed to ${nextPage}.`);
+    setLastAction(copy.actions.defaultPageChanged(pageItems[nextPage]?.label ?? nextPage));
   }
 
   function handleDefaultSortChange(event) {
@@ -738,7 +981,7 @@ export function App(props = {}) {
       defaultSortMode: nextSortMode,
     }));
     setSortMode(nextSortMode);
-    setLastAction(`Default sort changed to ${nextSortMode}.`);
+    setLastAction(copy.actions.defaultSortChanged(copy.sortOptions[nextSortMode] ?? nextSortMode));
   }
 
   function handleTiltToggle(event) {
@@ -748,7 +991,7 @@ export function App(props = {}) {
       ...previousValue,
       tiltEnabled: nextValue,
     }));
-    setLastAction(nextValue ? "Card tilt effect enabled." : "Card tilt effect disabled.");
+    setLastAction(nextValue ? copy.actions.tiltEnabled : copy.actions.tiltDisabled);
   }
 
   function handleGlareToggle(event) {
@@ -758,7 +1001,7 @@ export function App(props = {}) {
       ...previousValue,
       glareEnabled: nextValue,
     }));
-    setLastAction(nextValue ? "Card glare effect enabled." : "Card glare effect disabled.");
+    setLastAction(nextValue ? copy.actions.glareEnabled : copy.actions.glareDisabled);
   }
 
   function handleHighResToggle(event) {
@@ -768,12 +1011,25 @@ export function App(props = {}) {
       ...previousValue,
       highResImage: nextValue,
     }));
-    setLastAction(nextValue ? "High-resolution art enabled." : "Thumbnail art mode enabled.");
+    setLastAction(nextValue ? copy.actions.highResEnabled : copy.actions.highResDisabled);
+  }
+
+  function handleLocaleChange(event) {
+    const nextLocale = resolveSupportedLocale(event.target.value);
+    const nextCopy = getLocaleMessages(nextLocale);
+
+    setSettings((previousValue) => ({
+      ...previousValue,
+      locale: nextLocale,
+    }));
+    setLastAction(nextCopy.actions.languageChanged(
+      LANGUAGE_OPTIONS.find((option) => option.value === nextLocale)?.label ?? nextLocale
+    ));
   }
 
   function handleResetDemo() {
     // 설정, 필터, 선택 상태를 모두 초기화해 발표 중 언제든 기본 시연 상태로 돌아갈 수 있게 한다.
-    const nextSettings = { ...DEFAULT_SETTINGS };
+    const nextSettings = { ...DEFAULT_SETTINGS, locale: settings.locale };
     const nextCards = cards.map((card) => ({
       ...card,
       isFavorite: false,
@@ -789,7 +1045,7 @@ export function App(props = {}) {
     setLoadError(null);
     setDetailError(null);
     setCatalogNotice(null);
-    setLastAction("Card showcase reset to the default gallery state.");
+    setLastAction(copy.actions.resetShowcase);
   }
 
   function handleRetryLoad() {
@@ -797,7 +1053,7 @@ export function App(props = {}) {
     // 카탈로그 로드 effect를 다시 실행시키는 단순한 방식으로 구현한다.
     setDetailById({});
     setCatalogVersion((previousValue) => previousValue + 1);
-    setLastAction("Reloading the card showcase dataset.");
+    setLastAction(copy.actions.reloadingDataset);
   }
 
   function handleSelectNext() {
@@ -866,8 +1122,8 @@ export function App(props = {}) {
     if (isLoading) {
       return h("section", { className: "page-stack", id: "page-loading" },
         h("article", { className: "panel-card empty-detail-card" },
-          h("h1", null, "Loading card showcase"),
-          h("p", { id: "loading-state" }, "Preparing the gallery from external image-ready card records.")
+          h("h1", null, copy.actions.loadingLibrary),
+          h("p", { id: "loading-state" }, copy.collection.description)
         )
       );
     }
@@ -875,13 +1131,13 @@ export function App(props = {}) {
     if (loadError) {
       return h("section", { className: "page-stack", id: "page-error" },
         h("article", { className: "panel-card empty-detail-card" },
-          h("h1", null, "Unable to load cards"),
+          h("h1", null, copy.errors.loadingCardsTitle),
           h("p", { id: "error-state" }, loadError),
           h("button", {
             id: "retry-load-button",
             className: "primary-button",
             onClick: handleRetryLoad,
-          }, "Retry")
+          }, copy.common.retry)
         )
       );
     }
@@ -901,19 +1157,22 @@ export function App(props = {}) {
         typeFilter,
         favoritesOnly,
         sortMode,
-        typeLabels: TYPE_LABELS,
+        typeLabels,
+        copy,
         settings,
         selectedCardId,
-        emptyMessage: "No cards match the current collection filters.",
-        onViewportScroll: handleCollectionViewportScroll,
-        onSearchInput: handleSearchInput,
-        onTypeFilterChange: handleTypeFilterChange,
-        onFavoritesToggle: handleFavoritesToggle,
-        onSortChange: handleSortChange,
+        emptyMessage: copy.collection.emptyMessage,
+        onViewportScroll: collectionHandlers.onViewportScroll,
+        onSearchInput: collectionHandlers.onSearchInput,
+        onTypeFilterChange: collectionHandlers.onTypeFilterChange,
+        onFavoritesToggle: collectionHandlers.onFavoritesToggle,
+        onSortChange: collectionHandlers.onSortChange,
         onSelectCard: handleSelectAndOpen,
         onToggleFavorite: handleToggleFavorite,
-        onPointerMove: handlePointerMove,
-        onPointerLeave: handlePointerLeave,
+        onOpenCardClick: collectionHandlers.onOpenCardClick,
+        onFavoriteCardClick: collectionHandlers.onFavoriteCardClick,
+        onPointerMove: collectionPointerHandlers.onPointerMove,
+        onPointerLeave: collectionPointerHandlers.onPointerLeave,
       });
     }
 
@@ -921,6 +1180,8 @@ export function App(props = {}) {
       return h(DetailPage, {
         card: selectedCard,
         relatedCards,
+        typeLabels,
+        copy,
         settings,
         isDetailLoading,
         detailError,
@@ -936,9 +1197,11 @@ export function App(props = {}) {
     if (currentPage === "settings") {
       return h(SettingsPage, {
         pages: pageItems,
+        copy,
         settings,
         onDefaultPageChange: handleDefaultPageChange,
         onDefaultSortChange: handleDefaultSortChange,
+        onLocaleChange: handleLocaleChange,
         onTiltToggle: handleTiltToggle,
         onGlareToggle: handleGlareToggle,
         onHighResToggle: handleHighResToggle,
@@ -956,6 +1219,8 @@ export function App(props = {}) {
       lastAction,
       topTypeMessage,
       typeSummary,
+      typeLabels,
+      copy,
       settings,
       onNavigate: handleNavigate,
       onSelectCard: handleSelectAndOpen,
@@ -968,6 +1233,7 @@ export function App(props = {}) {
   return h(AppShell, {
     currentPage,
     pages: pageItems,
+    copy,
     onNavigate: handleNavigate,
     lastAction,
     catalogNotice,

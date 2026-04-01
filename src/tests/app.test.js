@@ -6,6 +6,7 @@
 import { createApp, h } from "../index.js";
 import { App } from "../app/App.js";
 import { CollectionPage } from "../app/pages/CollectionPage.js";
+import { getLocaleMessages } from "../app/i18n/messages.js";
 
 function flushMicrotasks() {
   return Promise.resolve().then(() => Promise.resolve());
@@ -120,6 +121,10 @@ function bindRuntimeInspector(root, runtimeBridge) {
 
 function createMountedApp(options = {}) {
   globalThis.__CARD_SHOWCASE_DATA_MODE__ = options.dataMode ?? "local";
+  globalThis.__CARD_SHOWCASE_LOCALE__ = options.locale ?? "en";
+  if (typeof localStorage !== "undefined") {
+    localStorage.clear();
+  }
   const root = document.createElement("div");
   const runtimeBridge = options.props?.runtimeBridge;
 
@@ -238,6 +243,49 @@ export async function runAppTests() {
         throw new Error("Expected detail showcase to reflect the disabled tilt setting.");
       }
     }),
+    runCase("card showcase selects a supported browser locale by default", async () => {
+      const { root } = createMountedApp({ locale: "ko-KR" });
+      await flushMicrotasks();
+
+      if (!root.querySelector("#nav-dashboard").textContent.includes("대시보드")) {
+        throw new Error("Expected dashboard navigation label to follow the supported browser locale.");
+      }
+
+      if (!root.querySelector("#global-status-bar").textContent.includes("컬렉션 런타임")) {
+        throw new Error("Expected shared UI chrome to use the detected Korean locale.");
+      }
+    }),
+    runCase("card showcase switches languages from the settings page", async () => {
+      const { root } = createMountedApp({ locale: "en" });
+      await flushMicrotasks();
+
+      click(root.querySelector("#nav-settings"));
+      await flushMicrotasks();
+
+      changeValue(root.querySelector("#settings-language-select"), "ja");
+      await flushMicrotasks();
+
+      if (!root.querySelector("#nav-collection").textContent.includes("コレクション")) {
+        throw new Error("Expected navigation labels to update after changing the locale.");
+      }
+
+      if (!root.querySelector("#settings-language-select").value.includes("ja")) {
+        throw new Error("Expected the settings page to keep the selected locale.");
+      }
+    }),
+    runCase("card showcase uses the local pokemon name dictionary before any API fallback", async () => {
+      const { root } = createMountedApp({ locale: "ko-KR", dataMode: "local" });
+      await flushMicrotasks();
+
+      click(root.querySelector("#nav-collection"));
+      await flushMicrotasks();
+
+      const collectionText = root.querySelector("#page-collection")?.textContent ?? "";
+
+      if (!collectionText.includes("\ud53c\uce74\uce04")) {
+        throw new Error(`Expected the local Korean name dictionary to drive card titles, received ${collectionText}.`);
+      }
+    }),
     runCase("card showcase shows a runtime notice when the remote catalog falls back", async () => {
       const originalFetch = globalThis.fetch;
 
@@ -315,6 +363,8 @@ export async function runAppTests() {
       const cards = createMockCards(48);
 
       function CollectionHarness() {
+        const copy = getLocaleMessages("en");
+
         return h(CollectionPage, {
           cards: cards.slice(0, 18),
           visibleCount: cards.length,
@@ -328,6 +378,7 @@ export async function runAppTests() {
           favoritesOnly: false,
           sortMode: "number",
           typeLabels: { grass: "Grass" },
+          copy,
           settings: {
             tiltEnabled: true,
             glareEnabled: true,

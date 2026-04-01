@@ -14,6 +14,8 @@ function createRuntimeBridge() {
     patchCount: 0,
     lastRenderPatchCount: 0,
     totalPatchCount: 0,
+    rawLastRenderPatchCount: 0,
+    rawTotalPatchCount: 0,
     patchLabels: [],
     diffMode: "auto",
     isMounted: false,
@@ -45,6 +47,8 @@ function createRuntimeBridge() {
 
 function renderInspectorPatchRows(root, patchLabels) {
   const list = root.querySelector("#runtime-inspector-patches");
+  const inspector = root.querySelector("#runtime-inspector");
+  const emptyLabel = inspector?.getAttribute("data-empty-patch-label") || "No DOM patch was needed for the last render.";
 
   if (!list) {
     return;
@@ -57,7 +61,7 @@ function renderInspectorPatchRows(root, patchLabels) {
   if (!patchLabels || patchLabels.length === 0) {
     const emptyItem = document.createElement("li");
     emptyItem.className = "inspector-patch-row is-empty";
-    emptyItem.textContent = "No DOM patch was needed for the last render.";
+    emptyItem.textContent = emptyLabel;
     list.appendChild(emptyItem);
     return;
   }
@@ -113,9 +117,11 @@ function buildInspectorSnapshot(app, runtimeBridge) {
   return {
     reason: component.isMounted ? "mount" : "bootstrap",
     renderCount: inspection.renderCount ?? 0,
-    patchCount: inspection.lastPatches?.length ?? 0,
+    patchCount: inspection.engine?.lastRenderPatchCount ?? inspection.lastPatches?.length ?? 0,
     lastRenderPatchCount: inspection.engine?.lastRenderPatchCount ?? inspection.lastPatches?.length ?? 0,
     totalPatchCount: inspection.engine?.totalPatchCount ?? inspection.totalPatchCount ?? 0,
+    rawLastRenderPatchCount: inspection.engine?.rawLastRenderPatchCount ?? inspection.lastPatches?.length ?? 0,
+    rawTotalPatchCount: inspection.engine?.rawTotalPatchCount ?? inspection.rawTotalPatchCount ?? 0,
     patchLabels: inspection.engine?.patchLabels ?? [],
     diffMode: component.diffMode ?? "auto",
     isMounted: component.isMounted ?? false,

@@ -1,6 +1,6 @@
 /*
  * Responsibility:
- * - 카드 쇼케이스 서비스의 공통 앱 셸을 렌더링한다.
+ * - 카드 컬렉션 서비스의 공통 틀을 렌더링한다.
  */
 
 import { h } from "../../index.js";
@@ -10,7 +10,7 @@ import { MobileTabBar } from "./MobileTabBar.js";
 function renderPatchRows(runtimeSnapshot) {
   if (!runtimeSnapshot.patchLabels || runtimeSnapshot.patchLabels.length === 0) {
     return [
-      h("li", { key: "empty", className: "inspector-patch-row is-empty" }, "No DOM patch was needed for the last render."),
+      h("li", { key: "empty", className: "inspector-patch-row is-empty" }, runtimeSnapshot.emptyLabel),
     ];
   }
 
@@ -20,10 +20,8 @@ function renderPatchRows(runtimeSnapshot) {
 }
 
 export function AppShell(props) {
-  // AppShell은 공통 크롬 역할만 담당한다.
-  // 페이지마다 바뀌는 실제 내용은 props.children으로 받기 때문에
-  // Dashboard, Collection, Detail, Settings 모두 같은 셸을 재사용할 수 있다.
   const inspectorCard = props.inspectorCard;
+  const inspectorCardName = inspectorCard ? (inspectorCard.displayName ?? inspectorCard.name) : "";
   const inspectorImageUrl = inspectorCard
     ? props.highResImage ? inspectorCard.imageUrl : inspectorCard.thumbUrl
     : null;
@@ -39,52 +37,58 @@ export function AppShell(props) {
     h(TopNavigation, {
       currentPage: props.currentPage,
       pages: props.pages,
+      copy: props.copy,
       onNavigate: props.onNavigate,
     }),
     h("section", { className: "global-status-bar", id: "global-status-bar" },
-      h("span", { className: "global-status-kicker" }, "Collection Runtime"),
+      h("span", { className: "global-status-kicker" }, props.copy.appShell.statusLabel),
       h("strong", { className: "global-status-message", id: "global-status-message" }, props.lastAction)
     ),
     props.catalogNotice
-      // catalogNotice는 "원격 카탈로그를 못 불렀지만 앱은 동작한다"는 사실을
-      // 사용자에게 알려주는 경고/안내 레이어다.
       ? h("section", { className: "runtime-notice-bar", id: "runtime-notice-bar" },
-        h("span", { className: "runtime-notice-label" }, "Catalog Notice"),
+        h("span", { className: "runtime-notice-label" }, props.copy.appShell.catalogNoticeLabel),
         h("strong", { className: "runtime-notice-message", id: "runtime-notice-message" }, props.catalogNotice)
       )
       : null,
     h("section", { className: serviceBodyClassName },
       h("main", { className: "service-main" }, props.children),
-      h("aside", { className: inspectorClassName, id: "runtime-inspector" },
+      h("aside", {
+        className: inspectorClassName,
+        id: "runtime-inspector",
+        "data-empty-patch-label": props.copy.common.noPatches,
+      },
         h("div", { className: "panel-heading" },
-          h("h2", null, "Render / Patch Inspector"),
-          h("p", null, "Use this panel as proof that the runtime updates only the affected DOM. Watch total renders, the patch count for the most recent render, and the cumulative patch total since mount.")
+          h("h2", null, props.copy.appShell.inspectorTitle),
+          h("p", null, props.copy.appShell.inspectorDescription)
         ),
         h("div", { className: "inspector-stat-grid" },
           h("div", { className: "inspector-stat-card", id: "inspector-render-count" },
-            h("span", { className: "inspector-stat-label" }, "Total Renders"),
+            h("span", { className: "inspector-stat-label" }, props.copy.appShell.totalRenders),
             h("strong", { className: "inspector-stat-value" }, "0")
           ),
           h("div", { className: "inspector-stat-card", id: "inspector-last-patch-count" },
-            h("span", { className: "inspector-stat-label" }, "Last Render Patch Count"),
+            h("span", { className: "inspector-stat-label" }, props.copy.appShell.lastRenderPatchCount),
             h("strong", { className: "inspector-stat-value" }, "0")
           ),
           h("div", { className: "inspector-stat-card", id: "inspector-total-patch-count" },
-            h("span", { className: "inspector-stat-label" }, "Total Patches Since Mount"),
+            h("span", { className: "inspector-stat-label" }, props.copy.appShell.totalPatchesSinceMount),
             h("strong", { className: "inspector-stat-value" }, "0")
           )
         ),
         h("article", { className: "inspector-note-card" },
-          h("span", { className: "inspector-note-label" }, "Last Runtime Action"),
+          h("span", { className: "inspector-note-label" }, props.copy.appShell.lastRuntimeAction),
           h("strong", { className: "inspector-note-value", id: "inspector-last-action" }, props.lastAction),
-          h("p", { className: "inspector-note-meta", id: "inspector-runtime-meta" }, "Reason: bootstrap · Diff: auto")
+          h("p", { className: "inspector-note-meta", id: "inspector-runtime-meta" }, props.copy.appShell.runtimeMeta("bootstrap", "auto"))
         ),
         h("article", { className: "inspector-patch-card" },
           h("div", { className: "panel-heading" },
-            h("h2", null, "Changed Patch Types"),
-            h("p", null, "Watch for focused updates like SET_PROP: src when art mode changes, instead of a full page reload.")
+            h("h2", null, props.copy.appShell.changedPatchTypes),
+            h("p", null, props.copy.appShell.changedPatchDescription)
           ),
-          h("ul", { className: "inspector-patch-list", id: "runtime-inspector-patches" }, ...renderPatchRows({ patchLabels: [] }))
+          h("ul", { className: "inspector-patch-list", id: "runtime-inspector-patches" }, ...renderPatchRows({
+            patchLabels: [],
+            emptyLabel: props.copy.common.noPatches,
+          }))
         ),
         inspectorCard
           ? h("article", {
@@ -93,18 +97,18 @@ export function AppShell(props) {
             "data-patch-highlight-root": "true",
           },
             h("div", { className: "panel-heading" },
-              h("h2", null, "Live Image Probe"),
-              h("p", null, "Visible image source updates make img src patches easier to notice during the demo.")
+              h("h2", null, props.copy.appShell.liveImageProbe),
+              h("p", null, props.copy.appShell.liveImageProbeDescription)
             ),
             h("img", {
               id: "runtime-inspector-probe-image",
               className: "inspector-probe-image",
               src: inspectorImageUrl,
-              alt: `${inspectorCard.name} runtime probe artwork`,
+              alt: `${inspectorCardName} runtime probe artwork`,
             }),
             h("div", { className: "inspector-probe-copy" },
-              h("strong", { className: "inspector-probe-title" }, inspectorCard.name),
-              h("span", { className: "inspector-probe-caption" }, props.highResImage ? "Official artwork source" : "Sprite thumbnail source")
+              h("strong", { className: "inspector-probe-title" }, inspectorCardName),
+              h("span", { className: "inspector-probe-caption" }, props.highResImage ? props.copy.appShell.officialArtworkSource : props.copy.appShell.spriteThumbnailSource)
             )
           )
           : null
@@ -113,6 +117,7 @@ export function AppShell(props) {
     h(MobileTabBar, {
       currentPage: props.currentPage,
       pages: props.pages,
+      copy: props.copy,
       onNavigate: props.onNavigate,
     })
   );

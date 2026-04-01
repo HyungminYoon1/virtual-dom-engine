@@ -9,6 +9,13 @@ const THUMB_ROOT = "https://raw.githubusercontent.com/PokeAPI/sprites/master/spr
 const MAX_NATIONAL_DEX = 1025;
 const PREVIEW_CARD_COUNT = 10;
 const IGNORED_TYPES = new Set(["unknown", "shadow"]);
+const LOCALE_NAME_PRIORITY = {
+  en: ["en"],
+  ko: ["ko"],
+  ja: ["ja-Hrkt", "ja"],
+  zh: ["zh-Hant", "zh-Hans", "zh"],
+  es: ["es"],
+};
 const TYPE_ORDER = [
   "normal",
   "fire",
@@ -125,6 +132,22 @@ function normalizeName(name) {
     .split("-")
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
     .join(" ");
+}
+
+function extractLocalizedSpeciesName(speciesData, locale, fallbackName) {
+  const priority = LOCALE_NAME_PRIORITY[locale] ?? LOCALE_NAME_PRIORITY.en;
+  const names = Array.isArray(speciesData?.names) ? speciesData.names : [];
+
+  for (const languageName of priority) {
+    const match = names.find((entry) => entry.language?.name === languageName);
+
+    if (match?.name) {
+      return match.name;
+    }
+  }
+
+  const englishMatch = names.find((entry) => entry.language?.name === "en");
+  return englishMatch?.name ?? fallbackName;
 }
 
 export async function fetchPokemonCatalog(fetchImpl = globalThis.fetch) {
@@ -244,4 +267,35 @@ export async function fetchPokemonDetail(card, fetchImpl = globalThis.fetch) {
     },
     flavor: extractFlavorText(speciesData),
   };
+}
+
+export async function fetchPokemonLocalizedNames(numbers, locale, fetchImpl = globalThis.fetch) {
+  assertFetch(fetchImpl);
+
+  if (!Array.isArray(numbers) || numbers.length === 0) {
+    return {};
+  }
+
+  const normalizedLocale = locale in LOCALE_NAME_PRIORITY ? locale : "en";
+  const uniqueNumbers = Array.from(new Set(
+    numbers
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0 && value <= MAX_NATIONAL_DEX)
+  ));
+
+  if (uniqueNumbers.length === 0) {
+    return {};
+  }
+
+  const pairs = await Promise.all(uniqueNumbers.map(async (pokemonNumber) => {
+    const speciesData = await readJson(fetchImpl(`${API_ROOT}/pokemon-species/${pokemonNumber}`));
+    const fallbackName = normalizeName(speciesData.name ?? String(pokemonNumber));
+
+    return [
+      String(pokemonNumber).padStart(3, "0"),
+      extractLocalizedSpeciesName(speciesData, normalizedLocale, fallbackName),
+    ];
+  }));
+
+  return Object.fromEntries(pairs);
 }

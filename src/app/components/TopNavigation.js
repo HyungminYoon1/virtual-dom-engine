@@ -25,8 +25,8 @@ export function TopNavigation(props) {
   // 사용자가 지금 어느 화면에 있는지 즉시 알 수 있게 한다.
   return h("header", { className: "top-nav" },
     h("div", { className: "brand-block" },
-      h("p", { className: "brand-eyebrow" }, "Prism Dex"),
-      h("strong", { className: "brand-title" }, "Card Collection Showcase"),
+      h("p", { className: "brand-eyebrow" }, props.copy.brand.eyebrow),
+      h("strong", { className: "brand-title" }, props.copy.brand.title),
       h("span", { className: "brand-page", id: "brand-page-label" }, currentMeta.label)
     ),
     h("nav", { className: "nav-row" }, ...renderButtons(props.currentPage, props.pages, props.onNavigate))

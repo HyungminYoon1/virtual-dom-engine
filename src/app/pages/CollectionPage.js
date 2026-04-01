@@ -1,6 +1,6 @@
 /*
  * Responsibility:
- * - 카드 검색, 필터, 정렬, 선택, 즐겨찾기 토글을 담당하는 페이지를 렌더링한다.
+ * - 카드 검색, 필터, 정렬, 선택, 즐겨찾기 토글을 담당하는 컬렉션 페이지를 렌더링한다.
  */
 
 import { h } from "../../index.js";
@@ -9,8 +9,6 @@ import { CollectionToolbar } from "../components/CollectionToolbar.js";
 import { CardTile } from "../components/CardTile.js";
 
 function renderCards(props) {
-  // 빈 결과 상태를 별도로 처리해 검색/필터 결과가 0개일 때도
-  // 사용자가 앱이 고장났다고 느끼지 않게 한다.
   if (props.cards.length === 0) {
     return [h("p", { id: "collection-empty-state", className: "empty-state" }, props.emptyMessage)];
   }
@@ -20,11 +18,15 @@ function renderCards(props) {
       key: card.id,
       card,
       isSelected: props.selectedCardId === card.id,
+      typeLabels: props.typeLabels,
+      copy: props.copy,
       tiltEnabled: props.settings.tiltEnabled,
       glareEnabled: props.settings.glareEnabled,
       highResImage: props.settings.highResImage,
       onSelect: props.onSelectCard,
       onToggleFavorite: props.onToggleFavorite,
+      onOpenClick: props.onOpenCardClick,
+      onFavoriteClick: props.onFavoriteCardClick,
       onPointerMove: props.onPointerMove,
       onPointerLeave: props.onPointerLeave,
     })
@@ -32,21 +34,19 @@ function renderCards(props) {
 }
 
 export function CollectionPage(props) {
-  // CollectionPage는 카드 앱의 작업 중심 화면이다.
-  // 검색, 필터, 정렬, 선택, 즐겨찾기 변경이 모두 여기서 자주 일어난다.
   const rowHeight = props.rowHeight ?? 430;
   const contentHeight = props.contentHeight ?? rowHeight;
   const windowOffset = props.windowOffset ?? 0;
 
   return h("section", { id: "page-collection", className: "page-stack" },
     h(PageHeader, {
-      kicker: "Collection",
-      title: "Interactive Card Gallery",
-      description: "Search, filter, sort, and select cards while the runtime updates the grid and detail state in real time.",
+      kicker: props.copy.collection.kicker,
+      title: props.copy.collection.title,
+      description: props.copy.collection.description,
       actions: [
         {
           id: "collection-go-detail",
-          label: "View Detail",
+          label: props.copy.collection.viewDetail,
           onClick: () => props.onNavigate("detail"),
           tone: "ghost",
         },
@@ -61,6 +61,7 @@ export function CollectionPage(props) {
       favoritesOnly: props.favoritesOnly,
       sortMode: props.sortMode,
       typeLabels: props.typeLabels,
+      copy: props.copy,
       onSearchInput: props.onSearchInput,
       onTypeFilterChange: props.onTypeFilterChange,
       onFavoritesToggle: props.onFavoritesToggle,

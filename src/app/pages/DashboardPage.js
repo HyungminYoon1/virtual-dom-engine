@@ -8,11 +8,9 @@ import { PageHeader } from "../components/PageHeader.js";
 import { SummaryCard } from "../components/SummaryCard.js";
 import { CardTile } from "../components/CardTile.js";
 
-function renderTypeSummary(items) {
-  // 요약 패널은 복잡한 그래프 대신 텍스트 리스트로도 충분히
-  // "필터된 카드 분포"를 설명할 수 있게 설계했다.
+function renderTypeSummary(items, emptyLabel) {
   if (items.length === 0) {
-    return [h("li", { key: "empty" }, "No type data yet.")];
+    return [h("li", { key: "empty" }, emptyLabel)];
   }
 
   return items.map((item) =>
@@ -21,17 +19,15 @@ function renderTypeSummary(items) {
 }
 
 export function DashboardPage(props) {
-  // Dashboard는 앱 전체 상태를 빠르게 요약하는 페이지다.
-  // 사용자는 여기서 "지금 데이터가 어떤 상태인지"를 먼저 이해한다.
   return h("section", { id: "page-dashboard", className: "page-stack" },
     h(PageHeader, {
-      kicker: "Dashboard",
-      title: "Card Collection Showcase",
-      description: "Track the current collection, spotlight a premium card, and jump into the interactive gallery.",
+      kicker: props.copy.dashboard.kicker,
+      title: props.copy.dashboard.title,
+      description: props.copy.dashboard.description,
       actions: [
         {
           id: "dashboard-go-collection",
-          label: "Open Collection",
+          label: props.copy.dashboard.openCollection,
           onClick: () => props.onNavigate("collection"),
         },
       ],
@@ -39,41 +35,43 @@ export function DashboardPage(props) {
     h("section", { className: "dashboard-grid" },
       h(SummaryCard, {
         id: "summary-total-cards",
-        label: "Total Cards",
+        label: props.copy.dashboard.totalCards,
         value: String(props.totalCount),
-        help: "Cards currently loaded into the showcase runtime.",
+        help: props.copy.dashboard.totalCardsHelp,
         tone: "warm",
       }),
       h(SummaryCard, {
         id: "summary-favorite-cards",
-        label: "Saved Cards",
+        label: props.copy.dashboard.savedCards,
         value: String(props.favoriteCount),
-        help: "Favorites are shared across dashboard, collection, and detail pages.",
+        help: props.copy.dashboard.savedCardsHelp,
         tone: "success",
       }),
       h(SummaryCard, {
         id: "summary-visible-cards",
-        label: "Visible Cards",
+        label: props.copy.dashboard.visibleCards,
         value: String(props.visibleCount),
-        help: "Count after the current filter and sort settings are applied.",
+        help: props.copy.dashboard.visibleCardsHelp,
       }),
       h(SummaryCard, {
         id: "summary-selected-card",
-        label: "Selected Card",
-        value: props.selectedCard ? props.selectedCard.name : "None",
-        help: "The active card powers the detail page and spotlight area.",
+        label: props.copy.dashboard.selectedCard,
+        value: props.selectedCard ? (props.selectedCard.displayName ?? props.selectedCard.name) : props.copy.common.none,
+        help: props.copy.dashboard.selectedCardHelp,
       })
     ),
     h("section", { className: "dashboard-two-column" },
       h("article", { className: "panel-card spotlight-panel" },
         h("div", { className: "panel-heading" },
-          h("h2", null, "Spotlight Card"),
-          h("p", null, "This featured card responds to the same runtime state used by the rest of the app.")
+          h("h2", null, props.copy.dashboard.spotlightTitle),
+          h("p", null, props.copy.dashboard.spotlightDescription)
         ),
         props.spotlightCard
           ? h(CardTile, {
             card: props.spotlightCard,
             isSelected: props.selectedCard?.id === props.spotlightCard.id,
+            typeLabels: props.typeLabels,
+            copy: props.copy,
             tiltEnabled: props.settings.tiltEnabled,
             glareEnabled: props.settings.glareEnabled,
             highResImage: props.settings.highResImage,
@@ -85,13 +83,13 @@ export function DashboardPage(props) {
             openId: "dashboard-spotlight-open",
             favoriteId: "dashboard-spotlight-favorite",
           })
-          : h("p", { className: "empty-state" }, "No spotlight card is available right now.")
+          : h("p", { className: "empty-state" }, props.copy.dashboard.noSpotlight)
       ),
       h("div", { className: "dashboard-stack" },
         h("article", { className: "panel-card activity-panel" },
           h("div", { className: "panel-heading" },
-            h("h2", null, "Latest Runtime Action"),
-            h("p", null, "This shared message helps demonstrate how root state affects multiple pages at once.")
+            h("h2", null, props.copy.dashboard.latestRuntimeAction),
+            h("p", null, props.copy.dashboard.latestRuntimeDescription)
           ),
           h("div", { className: "activity-callout" },
             h("strong", { id: "dashboard-last-action", className: "activity-title" }, props.lastAction),
@@ -100,10 +98,10 @@ export function DashboardPage(props) {
         ),
         h("article", { className: "panel-card" },
           h("div", { className: "panel-heading" },
-            h("h2", null, "Type Breakdown"),
-            h("p", null, "A derived summary that changes whenever collection state changes.")
+            h("h2", null, props.copy.dashboard.typeBreakdown),
+            h("p", null, props.copy.dashboard.typeBreakdownDescription)
           ),
-          h("ul", { id: "dashboard-type-summary", className: "insight-list" }, ...renderTypeSummary(props.typeSummary))
+          h("ul", { id: "dashboard-type-summary", className: "insight-list" }, ...renderTypeSummary(props.typeSummary, props.copy.dashboard.noTypeData))
         )
       )
     )

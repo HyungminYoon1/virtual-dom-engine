@@ -5,62 +5,56 @@
 
 import { h } from "../../index.js";
 
-function renderTypeOptions(typeLabels) {
-  // select의 option 목록도 루트 상수에서 받아오므로,
-  // 타입 체계가 바뀌어도 이 컴포넌트는 렌더링 역할만 유지하면 된다.
+function renderTypeOptions(typeLabels, allLabel) {
   return [
-    h("option", { key: "all", value: "all" }, "All Types"),
+    h("option", { key: "all", value: "all" }, allLabel),
     ...Object.entries(typeLabels).map(([value, label]) =>
       h("option", { key: value, value }, label)
     ),
   ];
 }
 
-function renderSortOptions() {
+function renderSortOptions(sortOptions) {
   return [
-    h("option", { key: "number", value: "number" }, "Number"),
-    h("option", { key: "name", value: "name" }, "Name"),
-    h("option", { key: "favorites", value: "favorites" }, "Favorites First"),
+    h("option", { key: "number", value: "number" }, sortOptions.number),
+    h("option", { key: "name", value: "name" }, sortOptions.name),
+    h("option", { key: "favorites", value: "favorites" }, sortOptions.favorites),
   ];
 }
 
 export function CollectionToolbar(props) {
-  // 이 툴바는 실제 상태를 소유하지 않는다.
-  // 입력 값과 변경 핸들러는 모두 루트 App이 내려주기 때문에 stateless 규칙을 지킨다.
   return h("section", { className: "panel-card toolbar-card" },
     h("div", { className: "panel-heading" },
-      h("h2", null, "Collection Controls"),
+      h("h2", null, props.copy.toolbar.title),
       h("p", {
         id: "collection-result-count",
-      }, props.renderedCount < props.visibleCount
-        ? `${props.visibleCount} matched · ${props.renderedCount} cards rendered in view / ${props.totalCount} loaded`
-        : `${props.visibleCount} / ${props.totalCount} cards visible`)
+      }, props.copy.toolbar.resultSummary(props.visibleCount, props.renderedCount, props.totalCount))
     ),
     h("div", { className: "toolbar-grid" },
       h("label", { className: "field" },
-        h("span", { className: "field-label" }, "Search"),
+        h("span", { className: "field-label" }, props.copy.toolbar.search),
         h("input", {
           id: "collection-search-input",
           value: props.searchKeyword,
           onInput: props.onSearchInput,
-          placeholder: "Search by card name",
+          placeholder: props.copy.toolbar.searchPlaceholder,
         })
       ),
       h("label", { className: "field" },
-        h("span", { className: "field-label" }, "Type"),
+        h("span", { className: "field-label" }, props.copy.toolbar.type),
         h("select", {
           id: "collection-type-filter",
           value: props.typeFilter,
           onChange: props.onTypeFilterChange,
-        }, ...renderTypeOptions(props.typeLabels))
+        }, ...renderTypeOptions(props.typeLabels, props.copy.toolbar.allTypes))
       ),
       h("label", { className: "field" },
-        h("span", { className: "field-label" }, "Sort"),
+        h("span", { className: "field-label" }, props.copy.toolbar.sort),
         h("select", {
           id: "collection-sort-select",
           value: props.sortMode,
           onChange: props.onSortChange,
-        }, ...renderSortOptions())
+        }, ...renderSortOptions(props.copy.sortOptions))
       ),
       h("label", { className: "checkbox-field toolbar-checkbox" },
         h("input", {
@@ -69,7 +63,7 @@ export function CollectionToolbar(props) {
           checked: props.favoritesOnly,
           onChange: props.onFavoritesToggle,
         }),
-        h("span", null, "Favorites only")
+        h("span", null, props.copy.toolbar.favoritesOnly)
       )
     )
   );

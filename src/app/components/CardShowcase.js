@@ -7,6 +7,7 @@ import { h } from "../../index.js";
 
 export function CardShowcase(props) {
   const card = props.card;
+  const displayName = card.displayName ?? card.name;
   // 설정 페이지에서 고해상도 이미지를 끄면 네트워크 부담을 줄이기 위해
   // 더 작은 썸네일을 쓰도록 분기한다.
   const imageUrl = props.highResImage ? card.imageUrl : card.thumbUrl;
@@ -31,11 +32,11 @@ export function CardShowcase(props) {
       id: "detail-card-image",
       className: "detail-card-image",
       src: imageUrl,
-      alt: `${card.name} full artwork`,
+      alt: `${displayName} full artwork`,
     }),
     h("div", { className: "detail-card-caption" },
       h("span", { id: "detail-card-number", className: "detail-card-number" }, `#${card.number}`),
-      h("strong", { id: "detail-card-name", className: "detail-card-name" }, card.name)
+      h("strong", { id: "detail-card-name", className: "detail-card-name" }, displayName)
     )
   );
 }
