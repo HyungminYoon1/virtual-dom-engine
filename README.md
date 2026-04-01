@@ -20,7 +20,7 @@ week5 과제인 `Component · State · Hooks` 구현을 위해 만든 React-like
 - 현재 시연 앱: `Dashboard / Collection / Detail / Settings`
 - 데이터 출처: `PokeAPI` + `official-artwork` 이미지
 - 정규 전국도감 범위: `#001 ~ #1025`
-- 현재 테스트 결과: `67 passed, 0 failed, 0 skipped`
+- 현재 테스트 결과: `78 passed, 0 failed, 0 skipped`
 
 ## 앱 미리보기
 
@@ -149,7 +149,12 @@ sequenceDiagram
 
 - Collection은 한 번에 전체 1025장을 그리지 않고, 가상 스크롤 방식으로 화면 근처 카드만 렌더합니다.
 - 원격 카탈로그는 먼저 `10장 preview`를 보여준 뒤 전체 전국도감 카탈로그를 백그라운드로 이어서 불러옵니다.
+- 앱 UI는 `English / 한국어 / 日本語 / 中文 / Español`을 지원하고, 저장된 설정이 없으면 브라우저 언어를 기준으로 기본 locale을 고릅니다.
+- 포켓몬 표시 이름은 로컬 이름 사전을 우선 사용하고, 사전에 없는 번호만 `pokemon-species`로 예외 보강합니다.
+- Collection의 타입 배지는 18개 타입 전체에 대해 공식 포켓몬 타입 팔레트 톤을 반영합니다.
+- Collection 가상 스크롤에서는 함수형 자식 `key` 보존과 patch 순서 보정을 통해 카드 타입 배지가 섞이지 않도록 안정화했습니다.
 - Detail은 메인 쇼케이스 카드 아래에 `Game Sprite` 비교 카드를 함께 보여줍니다.
+- Detail의 연관 포켓몬은 같은 진화트리를 먼저 보여주고, 부족한 칸은 같은 타입과 유사한 종족값 카드로 보강합니다.
 - 데스크톱에서는 `Render / Patch Inspector`로 렌더/patch를 시각화하고, 모바일에서는 화면을 비우기 위해 숨깁니다.
 
 ## 데이터와 이미지 출처
@@ -158,6 +163,7 @@ sequenceDiagram
 
 - 데이터: `PokeAPI` `https://pokeapi.co/api/v2/...`
 - 이미지: `PokeAPI sprites`의 `official-artwork` 및 기본 sprite
+- 포켓몬 다국어 표시 이름: 앱 내부 로컬 이름 사전 + `pokemon-species` 예외 fallback
 
 정규 전국도감 기준으로 `#001 ~ #1025`까지만 카탈로그에 포함합니다. 이 범위를 넘어가는 엔트리는 시연 앱에서 제외합니다.
 
@@ -210,7 +216,7 @@ sequenceDiagram
 
 현재 테스트 결과:
 
-- `67 passed, 0 failed, 0 skipped`
+- `78 passed, 0 failed, 0 skipped`
 
 ## 실행 방법
 
