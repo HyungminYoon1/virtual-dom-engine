@@ -1,6 +1,7 @@
 # Week5 React-like Runtime
 
-week5 과제인 `Component · State · Hooks` 구현을 위해 만든 React-like UI 런타임 프로젝트입니다. 현재 시연 앱은 `카드 컬렉션 쇼케이스`이며, 포켓몬 공개 데이터를 활용해 `단일 루트 엔트리 기반 상태 기반 다중 페이지 SPA`를 구현했습니다.
+week5 과제인 `Component · State · Hooks` 구현을 위해 만든 React-like UI 런타임 프로젝트입니다.  
+현재 시연 앱은 `카드 컬렉션 쇼케이스`이며, 포켓몬 공개 데이터를 활용해 `단일 루트 엔트리 기반 상태 기반 다중 페이지 SPA`를 구현했습니다.
 
 이 저장소의 장기 React 호환 문서는 [archive/v2](./archive/v2)에 보관했고, 현재 기준 문서는 week5 제출용 v3 문서입니다.
 
@@ -13,7 +14,25 @@ week5 과제인 `Component · State · Hooks` 구현을 위해 만든 React-like
 - 시연 앱 기획: [docs/demo-app-plan.md](./docs/demo-app-plan.md)
 - 학습 문서: [learning-docs/overview.md](./learning-docs/overview.md)
 
-## 프로젝트 개요
+## 한눈에 보기
+
+- 라이브러리 핵심: `FunctionComponent`, 루트 전용 `useState / useEffect / useMemo`, `Virtual DOM + Diff + Patch`
+- 현재 시연 앱: `Dashboard / Collection / Detail / Settings`
+- 데이터 출처: `PokeAPI` + `official-artwork` 이미지
+- 정규 전국도감 범위: `#001 ~ #1025`
+- 현재 테스트 결과: `64 passed, 0 failed, 0 skipped`
+
+## 앱 미리보기
+
+| Dashboard | Collection |
+|---|---|
+| ![Dashboard](./docs/assets/showcase-dashboard.png) | ![Collection](./docs/assets/showcase-collection.png) |
+
+| Detail | Settings |
+|---|---|
+| ![Detail](./docs/assets/showcase-detail.png) | ![Settings](./docs/assets/showcase-settings.png) |
+
+## 이 프로젝트가 보여주는 것
 
 이 프로젝트의 목적은 실제 React 전체를 복제하는 것이 아니라, week5 과제의 의도에 맞게 아래 핵심 개념을 직접 구현하고 설명 가능한 형태로 만드는 것입니다.
 
@@ -25,32 +44,7 @@ week5 과제인 `Component · State · Hooks` 구현을 위해 만든 React-like
 
 현재 앱은 단순 예제가 아니라, 외부 데이터를 불러오고 여러 화면이 상태를 공유하는 카드 쇼케이스 서비스로 구성되어 있습니다.
 
-## 현재 구현한 핵심 기능
-
-- 루트 컴포넌트를 감싸는 `FunctionComponent` 클래스
-- 루트 전용 Hook 저장소 `hooks`
-- `mount()`, `update()`, `unmount()`를 포함한 렌더 사이클
-- `useState`, `useEffect`, `useMemo`
-- 자식 stateless component와 `props` 전달
-- 자식 함수형 컴포넌트를 일반 VNode로 전개하는 resolver 단계
-- 기존 `src/core`의 Virtual DOM / Diff / Patch 재사용
-- microtask batching 기반 업데이트
-- 브라우저 데모 앱과 기능 테스트
-
-## 현재 시연 앱
-
-현재 시연 앱은 `카드 컬렉션 쇼케이스`입니다.
-
-구성 페이지:
-
-- `Dashboard`
-- `Collection`
-- `Detail`
-- `Settings`
-
-이 앱은 기술적으로는 하나의 루트 앱이지만, 사용자는 여러 페이지를 오가는 서비스처럼 느끼게 설계했습니다. 페이지 전환은 별도 mount가 아니라 루트 상태 `currentPage`를 바꾸는 방식으로 동작합니다.
-
-## 과제 요구와 앱의 연결
+## 과제 요구와 현재 앱의 연결
 
 과제에서 요구하는 핵심 요소가 앱에서 어떻게 사용되는지는 아래와 같습니다.
 
@@ -69,20 +63,72 @@ week5 과제인 `Component · State · Hooks` 구현을 위해 만든 React-like
 - `실제 브라우저 상호작용`
   - 카드 검색, 타입 필터, 정렬, 즐겨찾기 토글, 페이지 전환, 설정 변경이 모두 동작합니다.
 
-## 실제 React와의 공통점
+## 시스템 구조
 
-- 함수형 컴포넌트로 UI를 선언합니다.
-- 상태가 바뀌면 다시 렌더링됩니다.
-- Hook 호출 순서에 따라 상태를 유지합니다.
-- Virtual DOM을 만든 뒤 이전 트리와 비교해 필요한 DOM만 갱신합니다.
-- `useEffect`로 렌더 이후 부수 효과를 처리하고, `useMemo`로 파생 계산을 캐시합니다.
+```mermaid
+flowchart TD
+  A[src/index.js\n공개 API] --> B[src/core/runtime\nFunctionComponent + Hooks]
+  A --> C[src/core/vnode\nh + normalizeChildren]
+  B --> D[src/core/engine\ncreateEngine]
+  D --> E[src/core/reconciler\ndiff]
+  D --> F[src/core/renderer-dom\npatch + DOM update]
+  A --> G[src/app/main.js\n브라우저 부트스트랩]
+  G --> H[src/app/App.js\n루트 상태]
+  H --> I[Dashboard / Collection / Detail / Settings]
+```
 
-## 실제 React와의 차이점
+핵심 포인트:
 
-- 상태와 Hook은 루트 컴포넌트에서만 사용합니다.
-- 자식 컴포넌트는 상태 없는 pure function입니다.
-- Context, Ref, Suspense, Portal, SSR 같은 고급 기능은 제외합니다.
-- 공개 API 호환보다 구조 이해와 과제 설명 가능성을 우선합니다.
+- [src/index.js](./src/index.js)는 라이브러리의 정문입니다.
+- [src/core/runtime](./src/core/runtime)은 Hook과 렌더 사이클을 관리합니다.
+- [src/core/reconciler](./src/core/reconciler)는 변경 사항을 계산합니다.
+- [src/core/renderer-dom](./src/core/renderer-dom)은 실제 DOM을 수정합니다.
+- [src/app](./src/app)은 이 라이브러리 위에 만든 시연 앱입니다.
+
+## 앱 데이터 흐름
+
+```mermaid
+sequenceDiagram
+  participant Browser as Browser
+  participant Main as src/app/main.js
+  participant Runtime as createApp / FunctionComponent
+  participant App as src/app/App.js
+  participant Resolver as resolveComponentTree()
+  participant Engine as diff + patch
+  participant DOM as Browser DOM
+
+  Browser->>Main: HTML 로드
+  Main->>Runtime: createApp({ root, component: App }).mount()
+  Runtime->>App: 루트 상태 초기화
+  App->>App: useEffect로 카탈로그 로드
+  App->>Resolver: 자식 stateless component 전개
+  Resolver->>Engine: 최종 VDOM 전달
+  Engine->>DOM: 필요한 DOM만 patch
+  App->>DOM: 카드 tilt / holo 효과는 CSS 변수만 갱신
+```
+
+## 상태와 카드 인터랙션 분리
+
+이 프로젝트의 중요한 설계 포인트는 `상태 기반 렌더링`과 `고빈도 카드 효과`를 분리했다는 점입니다.
+
+### 루트 상태가 담당하는 것
+
+- 페이지 전환
+- 카드 목록
+- 검색/필터/정렬
+- 선택 카드
+- 즐겨찾기
+- 설정 반영
+- 로딩/오류 상태
+
+### 카드 DOM 효과가 담당하는 것
+
+- 카드 기울기
+- 홀로그램 표면 이동
+- 스파클/글로우 효과
+- 마우스 이탈 시 복귀
+
+즉, 데이터와 UI 구조 변화는 React-like 런타임이 처리하고, 마우스 이동 같은 초고빈도 효과는 카드 DOM 스타일만 직접 바꿔 성능을 지킵니다.
 
 ## 현재 앱 구조
 
@@ -113,44 +159,20 @@ week5 과제인 `Component · State · Hooks` 구현을 위해 만든 React-like
 - 마지막 성공 캐시가 있으면 캐시를 사용하고
 - 없으면 [src/app/data/cardLibrary.js](./src/app/data/cardLibrary.js)의 fallback 카드로 내려갑니다.
 
-## 상태와 데이터 흐름
+## 실제 React와의 공통점
 
-핵심 상태는 모두 [src/app/App.js](./src/app/App.js)에 있습니다.
+- 함수형 컴포넌트로 UI를 선언합니다.
+- 상태가 바뀌면 다시 렌더링됩니다.
+- Hook 호출 순서에 따라 상태를 유지합니다.
+- Virtual DOM을 만든 뒤 이전 트리와 비교해 필요한 DOM만 갱신합니다.
+- `useEffect`로 렌더 이후 부수 효과를 처리하고, `useMemo`로 파생 계산을 캐시합니다.
 
-- `currentPage`
-- `cards`
-- `selectedCardId`
-- `searchKeyword`
-- `typeFilter`
-- `favoritesOnly`
-- `sortMode`
-- `settings`
-- `lastAction`
+## 실제 React와의 차이점
 
-흐름 요약:
-
-1. [src/app/main.js](./src/app/main.js)에서 `createApp()`으로 앱을 mount 합니다.
-2. [src/app/App.js](./src/app/App.js)가 루트 상태를 만들고 원격 카탈로그를 로드합니다.
-3. `useMemo`로 필터/정렬 결과와 KPI를 계산합니다.
-4. `currentPage` 값에 따라 `Dashboard`, `Collection`, `Detail`, `Settings` 페이지를 전환합니다.
-5. 카드 기울기와 반짝임은 루트 상태가 아니라 DOM 스타일 변수로 처리해, 고빈도 마우스 이동에서도 전체 앱이 다시 렌더되지 않게 합니다.
-
-## 카드 시각 효과 설계
-
-카드의 3D 틸트와 홀로그램 효과는 데이터 상태와 분리되어 있습니다.
-
-- 데이터 상태가 담당하는 것
-  - 카드 선택
-  - 즐겨찾기
-  - 필터/정렬
-  - 페이지 전환
-  - 설정 반영
-- DOM 스타일이 담당하는 것
-  - 카드 기울기
-  - 홀로그램 표면 이동
-  - 스파클/글로우 효과
-
-이 분리는 week5 과제의 상태 관리 구조를 유지하면서도, 시연에서 시각적으로 더 인상적인 결과를 얻기 위한 설계입니다.
+- 상태와 Hook은 루트 컴포넌트에서만 사용합니다.
+- 자식 컴포넌트는 상태 없는 pure function입니다.
+- Context, Ref, Suspense, Portal, SSR 같은 고급 기능은 제외합니다.
+- 공개 API 호환보다 구조 이해와 과제 설명 가능성을 우선합니다.
 
 ## 테스트 전략과 결과
 
@@ -196,15 +218,6 @@ npm run build
 
 정적 서버를 사용해 [index.html](./index.html)을 열면 현재 카드 쇼케이스 앱을 브라우저에서 확인할 수 있습니다.
 
-## 발표 때 설명하면 좋은 포인트
-
-- 왜 상태를 루트 한 곳에만 두었는가
-- 자식 컴포넌트가 왜 stateless component인가
-- `useMemo`가 카드 필터/정렬 결과와 KPI를 어떻게 재사용하는가
-- `useEffect`가 데이터 로드, 문서 제목, localStorage 저장에 어떻게 쓰였는가
-- 카드 3D 효과를 왜 state가 아니라 DOM 스타일로 분리했는가
-- Virtual DOM + Diff + Patch가 실제 사용자 상호작용에 어떻게 연결되는가
-
 ## 현재 상태 요약
 
 현재 구현은 v3 문서의 취지에 맞게 작성되어 있습니다.
@@ -217,4 +230,4 @@ npm run build
 - 브라우저 시연 가능
 - 테스트와 빌드 통과
 
-남은 작업은 구조를 바꾸는 것이 아니라, 발표용 설명과 시각 완성도를 더 다듬는 수준입니다.
+남은 작업은 구조를 바꾸는 것이 아니라, 시각 완성도를 더 다듬는 수준입니다.

@@ -661,7 +661,7 @@
     .detail-showcase {
       min-height: 620px;
       display: grid;
-      align-content: end;
+      align-content: start;
       padding: 0;
       background:
         radial-gradient(circle at top, rgba(124, 92, 255, 0.3), transparent 36%),
@@ -670,7 +670,9 @@
     }
 
     .detail-card-image {
-      padding: 22px;
+      padding: 10px 18px 0;
+      object-position: center top;
+      transform: translateY(-8px);
     }
 
     .detail-card-caption {
