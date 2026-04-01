@@ -19,9 +19,26 @@ function describePatch(patch) {
   return patch.type;
 }
 
+function isDisplayPatch(patch) {
+  if (!patch || typeof patch !== "object") {
+    return false;
+  }
+
+  if (patch.type === "SET_EVENT" || patch.type === "REMOVE_EVENT") {
+    return false;
+  }
+
+  if ((patch.type === "SET_PROP" || patch.type === "REMOVE_PROP") && typeof patch.name === "string" && patch.name.startsWith("data-")) {
+    return false;
+  }
+
+  return true;
+}
+
 export function inspectEngine(engineState) {
   const lastPatches = engineState.lastPatches ?? [];
-  const lastRenderPatchCount = lastPatches.length;
+  const rawLastRenderPatchCount = lastPatches.length;
+  const lastRenderPatchCount = lastPatches.filter(isDisplayPatch).length;
 
   return {
     currentVNode: engineState.currentVNode,
@@ -29,7 +46,9 @@ export function inspectEngine(engineState) {
     diffMode: engineState.diffMode,
     patchCount: lastRenderPatchCount,
     lastRenderPatchCount,
+    rawLastRenderPatchCount,
     totalPatchCount: engineState.totalPatchCount ?? lastRenderPatchCount,
+    rawTotalPatchCount: engineState.rawTotalPatchCount ?? rawLastRenderPatchCount,
     patchLabels: lastPatches.map(describePatch),
     lastPatches,
   };

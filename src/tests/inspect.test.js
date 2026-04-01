@@ -27,6 +27,7 @@ export function runInspectTests() {
         diffMode: "auto",
         lastPatches: patchList,
         totalPatchCount: 4,
+        rawTotalPatchCount: 4,
       });
 
       if (result.diffMode !== "auto") {
@@ -39,6 +40,33 @@ export function runInspectTests() {
 
       if (result.totalPatchCount !== 4) {
         throw new Error("Expected inspect result to include cumulative patch count.");
+      }
+
+      if (result.rawTotalPatchCount !== 4) {
+        throw new Error("Expected inspect result to preserve raw cumulative patch count.");
+      }
+    }),
+    runCase("inspect engine excludes event churn from visible patch counts while preserving raw totals", () => {
+      const currentVNode = h("button", { className: "before" }, "A");
+      const result = inspectEngine({
+        currentVNode,
+        history: { entries: [currentVNode], currentIndex: 0 },
+        diffMode: "auto",
+        lastPatches: [
+          { type: "SET_EVENT", name: "click" },
+          { type: "SET_PROP", name: "data-card-id", value: "card-025" },
+          { type: "SET_PROP", name: "className", value: "after" },
+        ],
+        totalPatchCount: 1,
+        rawTotalPatchCount: 3,
+      });
+
+      if (result.patchCount !== 1 || result.lastRenderPatchCount !== 1) {
+        throw new Error("Expected visible patch counts to ignore event and internal data churn.");
+      }
+
+      if (result.rawLastRenderPatchCount !== 3 || result.rawTotalPatchCount !== 3) {
+        throw new Error("Expected raw patch counts to preserve every emitted patch.");
       }
     }),
     runCase("inspect engine preserves current vnode reference", () => {
@@ -78,8 +106,8 @@ export function runInspectTests() {
         throw new Error("Expected engine inspect metadata to expose patch labels.");
       }
 
-      if (result.totalPatchCount !== 0) {
-        throw new Error("Expected createApp inspect to expose cumulative patch metadata.");
+      if (result.totalPatchCount !== 0 || result.rawTotalPatchCount !== 0) {
+        throw new Error("Expected createApp inspect to expose visible and raw cumulative patch metadata.");
       }
     }),
   ];

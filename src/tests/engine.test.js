@@ -51,6 +51,36 @@ export function runEngineTests() {
         throw new Error("Expected patch to push a new history entry.");
       }
     }),
+    runCase("engine inspect keeps visible patch totals separate from raw listener churn", () => {
+      const root = document.createElement("div");
+      const engine = createEngine({
+        root,
+        initialVNode: h("button", {
+          onClick: () => {},
+          "data-card-id": "card-025",
+        }, "A"),
+      });
+
+      engine.render(h("button", {
+        onClick: () => {},
+        "data-card-id": "card-025",
+      }, "A"));
+      engine.patch(h("button", {
+        onClick: () => {},
+        "data-card-id": "card-026",
+        className: "is-selected",
+      }, "A"));
+
+      const snapshot = engine.inspect();
+
+      if (snapshot.lastRenderPatchCount !== 1 || snapshot.totalPatchCount !== 1) {
+        throw new Error("Expected visible engine patch counts to exclude listener and data-* churn.");
+      }
+
+      if (snapshot.rawLastRenderPatchCount <= snapshot.lastRenderPatchCount) {
+        throw new Error("Expected raw engine patch counts to preserve every emitted patch.");
+      }
+    }),
     runCase("engine setDiffMode updates active mode", () => {
       const root = document.createElement("div");
       const engine = createEngine({ root, initialVNode: h("div", null, "A") });

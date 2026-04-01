@@ -41,6 +41,26 @@ function describePatch(patch) {
   return patch.type;
 }
 
+function isDisplayPatch(patch) {
+  if (!patch || typeof patch !== "object") {
+    return false;
+  }
+
+  if (patch.type === "SET_EVENT" || patch.type === "REMOVE_EVENT") {
+    return false;
+  }
+
+  if ((patch.type === "SET_PROP" || patch.type === "REMOVE_PROP") && typeof patch.name === "string" && patch.name.startsWith("data-")) {
+    return false;
+  }
+
+  return true;
+}
+
+function countDisplayPatches(patches = []) {
+  return patches.filter(isDisplayPatch).length;
+}
+
 function summarizePatchLabels(patches) {
   const rawLabels = patches.map(describePatch);
   const semanticLabels = rawLabels.filter((label) => {
@@ -98,6 +118,7 @@ export class FunctionComponent {
     this.renderCount = 0;
     this.lastPatches = [];
     this.totalPatchCount = 0;
+    this.rawTotalPatchCount = 0;
     this.scheduledUpdate = null;
     this.engine = null;
     this.hasMountedOnce = false;
@@ -113,12 +134,16 @@ export class FunctionComponent {
       return;
     }
 
+    const lastRenderPatchCount = countDisplayPatches(this.lastPatches);
+
     this.runtimeBridge.publish({
       reason,
       renderCount: this.renderCount,
-      patchCount: this.lastPatches.length,
-      lastRenderPatchCount: this.lastPatches.length,
+      patchCount: lastRenderPatchCount,
+      lastRenderPatchCount,
       totalPatchCount: this.totalPatchCount,
+      rawLastRenderPatchCount: this.lastPatches.length,
+      rawTotalPatchCount: this.rawTotalPatchCount,
       patchLabels: summarizePatchLabels(this.lastPatches),
       diffMode: this.diffMode,
       isMounted: this.isMounted,
@@ -208,7 +233,8 @@ export class FunctionComponent {
 
     this.currentVNode = nextVNode;
     this.lastPatches = result.patches;
-    this.totalPatchCount += result.patches.length;
+    this.totalPatchCount += countDisplayPatches(result.patches);
+    this.rawTotalPatchCount += result.patches.length;
 
     commitEffects(this);
     this.publishRuntimeSnapshot("update");

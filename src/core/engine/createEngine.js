@@ -31,6 +31,26 @@ function getManagedDomRoot(root) {
   return root.firstChild ?? null;
 }
 
+function isDisplayPatch(patch) {
+  if (!patch || typeof patch !== "object") {
+    return false;
+  }
+
+  if (patch.type === "SET_EVENT" || patch.type === "REMOVE_EVENT") {
+    return false;
+  }
+
+  if ((patch.type === "SET_PROP" || patch.type === "REMOVE_PROP") && typeof patch.name === "string" && patch.name.startsWith("data-")) {
+    return false;
+  }
+
+  return true;
+}
+
+function countDisplayPatches(patches = []) {
+  return patches.filter(isDisplayPatch).length;
+}
+
 function syncRoot(root, vnode) {
   clearRoot(root);
   root.appendChild(createDomFromVNode(vnode));
@@ -63,6 +83,7 @@ export function createEngine(options = {}) {
     diffMode: options.diffMode ?? DIFF_MODES.AUTO,
     lastPatches: [],
     totalPatchCount: 0,
+    rawTotalPatchCount: 0,
   };
 
   return {
@@ -99,7 +120,8 @@ export function createEngine(options = {}) {
       applyPatches(managedDomRoot, patches);
       state.currentVNode = nextVNode;
       state.lastPatches = patches;
-      state.totalPatchCount += patches.length;
+      state.totalPatchCount += countDisplayPatches(patches);
+      state.rawTotalPatchCount += patches.length;
       pushHistory(state.history, nextVNode);
 
       return {

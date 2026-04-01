@@ -76,6 +76,7 @@ export function createApp(options = {}) {
         lastPatches: instance.lastPatches,
         renderCount: instance.renderCount,
         totalPatchCount: instance.totalPatchCount,
+        rawTotalPatchCount: instance.rawTotalPatchCount,
         engine: engineSnapshot,
       };
     },
