@@ -6,10 +6,11 @@
 import { h, useEffect, useMemo, useState } from "../index.js";
 import { CARD_LIBRARY, DEFAULT_SETTINGS, PAGE_META } from "./data/cardLibrary.js";
 import {
+  createPokemonShellCatalog,
   fetchPokemonCatalog,
+  fetchPokemonCardsByNumbers,
   fetchPokemonDetail,
   fetchPokemonLocalizedNames,
-  fetchPokemonPreviewCatalog,
 } from "./data/pokeApiClient.js";
 import { getLocalPokemonName } from "./data/pokemon-names/index.js";
 import { getLocaleMessages, LANGUAGE_OPTIONS, resolveSupportedLocale } from "./i18n/messages.js";
@@ -22,7 +23,8 @@ import { SettingsPage } from "./pages/SettingsPage.js";
 const CATALOG_CACHE_KEY = "card-showcase-catalog-cache";
 const MAX_NATIONAL_DEX = 1025;
 const COLLECTION_ROW_HEIGHT = 430;
-const COLLECTION_BUFFER_ROWS = 1;
+const COLLECTION_ROW_GAP = 18;
+const COLLECTION_PAGE_SIZE = 24;
 const COLLECTION_FALLBACK_VIEWPORT_HEIGHT = 720;
 const COLLECTION_FALLBACK_VIEWPORT_WIDTH = 880;
 
@@ -45,6 +47,7 @@ function cloneDefaultCards() {
     ...card,
     types: card.types.slice(),
     baseStats: card.baseStats ? { ...card.baseStats } : null,
+    isHydrated: true,
   }));
 }
 
@@ -129,6 +132,7 @@ function readCatalogCache() {
     types: Array.isArray(card.types) ? card.types.slice() : [],
     baseStats: card.baseStats ? { ...card.baseStats } : null,
     isFavorite: false,
+    isHydrated: card.isHydrated ?? true,
   })).filter((card) => Number(card.number) <= MAX_NATIONAL_DEX);
 }
 
@@ -158,6 +162,7 @@ function mergeFavoriteFlags(cards, favoriteIds) {
     types: Array.isArray(card.types) ? card.types.slice() : [],
     baseStats: card.baseStats ? { ...card.baseStats } : null,
     isFavorite: favoriteSet.has(card.id),
+    isHydrated: card.isHydrated ?? true,
   }));
 }
 
@@ -173,11 +178,7 @@ function createPageItems(pages, localizedPages) {
   }, {});
 }
 
-function createCatalogStatusMessage(copy, loadedCount, isStreamingCatalog) {
-  if (isStreamingCatalog) {
-    return copy.actions.previewLoaded(loadedCount);
-  }
-
+function createCatalogStatusMessage(copy, loadedCount) {
   return copy.actions.catalogLoaded(loadedCount);
 }
 
@@ -197,8 +198,28 @@ function resolveCollectionColumnCount(width) {
   return 4;
 }
 
+function resolveCollectionRowsPerPage(columnCount) {
+  return Math.max(1, Math.ceil(COLLECTION_PAGE_SIZE / columnCount));
+}
+
+function resolveCollectionPageHeight(columnCount) {
+  const rowsPerPage = resolveCollectionRowsPerPage(columnCount);
+  return rowsPerPage * COLLECTION_ROW_HEIGHT + Math.max(0, rowsPerPage - 1) * COLLECTION_ROW_GAP;
+}
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function resetCollectionPage(previousValue) {
+  if (previousValue.pageIndex === 0) {
+    return previousValue;
+  }
+
+  return {
+    ...previousValue,
+    pageIndex: 0,
+  };
 }
 
 function sortCards(cards, sortMode, locale) {
@@ -448,6 +469,24 @@ function withDisplayName(card, locale, localizedNamesByLocale) {
   };
 }
 
+function mergeCardsByNumber(previousCards, nextCards) {
+  const nextCardMap = new Map(nextCards.map((card) => [card.number, card]));
+
+  return previousCards.map((card) => {
+    const replacement = nextCardMap.get(card.number);
+
+    if (!replacement) {
+      return card;
+    }
+
+    return {
+      ...card,
+      ...replacement,
+      isFavorite: card.isFavorite,
+    };
+  });
+}
+
 export function App(props = {}) {
   // App은 문서에서 정의한 "단일 루트 상태 저장소" 역할을 그대로 수행한다.
   // 여기 있는 상태가 대시보드, 컬렉션, 상세, 설정 페이지 전체를 움직인다.
@@ -469,9 +508,11 @@ export function App(props = {}) {
   const [detailError, setDetailError] = useState(null);
   const [catalogNotice, setCatalogNotice] = useState(null);
   const [isStreamingCatalog, setIsStreamingCatalog] = useState(false);
+  const [hasLoadedFullCatalog, setHasLoadedFullCatalog] = useState(getDataMode() === "local");
+  const [hydratingCardNumbers, setHydratingCardNumbers] = useState({});
   const [localizedNamesByLocale, setLocalizedNamesByLocale] = useState({});
   const [collectionViewport, setCollectionViewport] = useState({
-    scrollTop: 0,
+    pageIndex: 0,
     viewportHeight: COLLECTION_FALLBACK_VIEWPORT_HEIGHT,
     viewportWidth: COLLECTION_FALLBACK_VIEWPORT_WIDTH,
   });
@@ -499,12 +540,14 @@ export function App(props = {}) {
     () => (selectedCardBase ? detailById[selectedCardBase.id] ?? null : null),
     [detailById, selectedCardBase]
   );
+  const selectedCardNumber = selectedCardBase?.number ?? null;
   const selectedCard = useMemo(() => mergeCardWithDetail(selectedCardBase, selectedCardDetail), [selectedCardBase, selectedCardDetail]);
   const typeSummary = useMemo(() => buildTypeSummary(visibleCards, typeLabels), [typeLabels, visibleCards]);
   const spotlightCard = useMemo(
     () => selectedCard ?? visibleCards[0] ?? localizedCards[0] ?? null,
     [localizedCards, selectedCard, visibleCards]
   );
+  const spotlightCardNumber = spotlightCard?.number ?? null;
   const topTypeLeader = useMemo(() => resolveTopTypeMessage(typeSummary), [typeSummary]);
   const topTypeMessage = useMemo(() => (
     topTypeLeader
@@ -523,46 +566,57 @@ export function App(props = {}) {
     return buildRelatedCards(selectedCardBase, selectedCardDetail, localizedCards);
   }, [localizedCards, selectedCardBase, selectedCardDetail]);
   const collectionColumnCount = useMemo(() => resolveCollectionColumnCount(collectionViewport.viewportWidth), [collectionViewport.viewportWidth]);
-  const collectionVisibleRowCount = useMemo(
-    () => Math.max(1, Math.ceil(collectionViewport.viewportHeight / COLLECTION_ROW_HEIGHT)),
-    [collectionViewport.viewportHeight]
+  const collectionPageHeight = useMemo(
+    () => resolveCollectionPageHeight(collectionColumnCount),
+    [collectionColumnCount]
   );
-  const collectionTotalRowCount = useMemo(
-    () => Math.ceil(visibleCards.length / collectionColumnCount),
-    [collectionColumnCount, visibleCards.length]
+  const collectionTotalPageCount = useMemo(
+    () => Math.max(1, Math.ceil(visibleCards.length / COLLECTION_PAGE_SIZE)),
+    [visibleCards.length]
   );
-  const collectionStartRow = useMemo(() => {
-    const rawStartRow = Math.floor(collectionViewport.scrollTop / COLLECTION_ROW_HEIGHT) - COLLECTION_BUFFER_ROWS;
-    const maxStartRow = Math.max(0, collectionTotalRowCount - (collectionVisibleRowCount + COLLECTION_BUFFER_ROWS * 2));
-
-    return clamp(rawStartRow, 0, maxStartRow);
-  }, [collectionTotalRowCount, collectionViewport.scrollTop, collectionVisibleRowCount]);
-  const collectionEndRow = useMemo(
-    () => Math.min(collectionTotalRowCount, collectionStartRow + collectionVisibleRowCount + COLLECTION_BUFFER_ROWS * 2),
-    [collectionStartRow, collectionTotalRowCount, collectionVisibleRowCount]
+  const collectionCurrentPage = useMemo(
+    () => clamp(collectionViewport.pageIndex, 0, Math.max(0, collectionTotalPageCount - 1)),
+    [collectionTotalPageCount, collectionViewport.pageIndex]
   );
-  const collectionStartIndex = useMemo(() => collectionStartRow * collectionColumnCount, [collectionColumnCount, collectionStartRow]);
+  const collectionStartPage = useMemo(
+    () => Math.max(0, collectionCurrentPage - 1),
+    [collectionCurrentPage]
+  );
+  const collectionEndPage = useMemo(
+    () => Math.min(collectionTotalPageCount, collectionCurrentPage + 2),
+    [collectionCurrentPage, collectionTotalPageCount]
+  );
+  const collectionStartIndex = useMemo(() => collectionStartPage * COLLECTION_PAGE_SIZE, [collectionStartPage]);
   const collectionEndIndex = useMemo(
-    () => Math.min(visibleCards.length, collectionEndRow * collectionColumnCount),
-    [collectionColumnCount, collectionEndRow, visibleCards.length]
+    () => Math.min(visibleCards.length, collectionEndPage * COLLECTION_PAGE_SIZE),
+    [collectionEndPage, visibleCards.length]
   );
   const collectionVisibleSlice = useMemo(
     () => visibleCards.slice(collectionStartIndex, collectionEndIndex),
     [collectionEndIndex, collectionStartIndex, visibleCards]
   );
+  const collectionVisibleNumbers = useMemo(
+    () => collectionVisibleSlice.map((card) => card.number),
+    [collectionVisibleSlice]
+  );
+  const collectionWindowKey = useMemo(
+    () => `${visibleCards.length}:${collectionStartIndex}:${collectionVisibleSlice.map((card) => card.id).join("|")}`,
+    [collectionStartIndex, collectionVisibleSlice, visibleCards.length]
+  );
   const collectionWindowOffset = useMemo(
-    () => collectionStartRow * COLLECTION_ROW_HEIGHT,
-    [collectionStartRow]
+    () => collectionStartPage * collectionPageHeight,
+    [collectionPageHeight, collectionStartPage]
   );
   const collectionContentHeight = useMemo(
-    () => Math.max(collectionViewport.viewportHeight, collectionTotalRowCount * COLLECTION_ROW_HEIGHT),
-    [collectionTotalRowCount, collectionViewport.viewportHeight]
+    () => Math.max(collectionViewport.viewportHeight, collectionTotalPageCount * collectionPageHeight),
+    [collectionPageHeight, collectionTotalPageCount, collectionViewport.viewportHeight]
   );
   const collectionHandlers = useMemo(() => ({
     onSearchInput(event) {
       const nextKeyword = event.target.value;
 
       setSearchKeyword(nextKeyword);
+      setCollectionViewport(resetCollectionPage);
       setLastAction(copy.actions.searching(nextKeyword));
     },
 
@@ -570,6 +624,7 @@ export function App(props = {}) {
       const nextType = event.target.value;
 
       setTypeFilter(nextType);
+      setCollectionViewport(resetCollectionPage);
       setLastAction(copy.actions.typeFilterChanged(
         nextType === "all"
           ? copy.toolbar.allTypes
@@ -581,6 +636,7 @@ export function App(props = {}) {
       const nextFavoritesOnly = Boolean(event.target.checked);
 
       setFavoritesOnly(nextFavoritesOnly);
+      setCollectionViewport(resetCollectionPage);
       setLastAction(nextFavoritesOnly ? copy.actions.favoritesOnlyOn : copy.actions.favoritesOnlyOff);
     },
 
@@ -588,6 +644,7 @@ export function App(props = {}) {
       const nextSortMode = event.target.value;
 
       setSortMode(nextSortMode);
+      setCollectionViewport(resetCollectionPage);
       setLastAction(copy.actions.sortChanged(copy.sortOptions[nextSortMode] ?? nextSortMode));
     },
 
@@ -595,14 +652,18 @@ export function App(props = {}) {
       const target = event.currentTarget;
 
       setCollectionViewport((previousValue) => {
+        const nextViewportWidth = target.clientWidth || previousValue.viewportWidth;
+        const nextViewportHeight = target.clientHeight || previousValue.viewportHeight;
+        const nextColumnCount = resolveCollectionColumnCount(nextViewportWidth);
+        const nextPageHeight = resolveCollectionPageHeight(nextColumnCount);
         const nextValue = {
-          scrollTop: target.scrollTop,
-          viewportHeight: target.clientHeight || previousValue.viewportHeight,
-          viewportWidth: target.clientWidth || previousValue.viewportWidth,
+          pageIndex: Math.max(0, Math.floor(target.scrollTop / nextPageHeight)),
+          viewportHeight: nextViewportHeight,
+          viewportWidth: nextViewportWidth,
         };
 
         if (
-          previousValue.scrollTop === nextValue.scrollTop
+          previousValue.pageIndex === nextValue.pageIndex
           && previousValue.viewportHeight === nextValue.viewportHeight
           && previousValue.viewportWidth === nextValue.viewportWidth
         ) {
@@ -725,14 +786,18 @@ export function App(props = {}) {
 
     function syncViewport() {
       setCollectionViewport((previousValue) => {
+        const nextViewportWidth = viewport.clientWidth || previousValue.viewportWidth;
+        const nextViewportHeight = viewport.clientHeight || previousValue.viewportHeight;
+        const nextColumnCount = resolveCollectionColumnCount(nextViewportWidth);
+        const nextPageHeight = resolveCollectionPageHeight(nextColumnCount);
         const nextValue = {
-          scrollTop: viewport.scrollTop,
-          viewportHeight: viewport.clientHeight || previousValue.viewportHeight,
-          viewportWidth: viewport.clientWidth || previousValue.viewportWidth,
+          pageIndex: Math.max(0, Math.floor(viewport.scrollTop / nextPageHeight)),
+          viewportHeight: nextViewportHeight,
+          viewportWidth: nextViewportWidth,
         };
 
         if (
-          previousValue.scrollTop === nextValue.scrollTop
+          previousValue.pageIndex === nextValue.pageIndex
           && previousValue.viewportHeight === nextValue.viewportHeight
           && previousValue.viewportWidth === nextValue.viewportWidth
         ) {
@@ -788,29 +853,16 @@ export function App(props = {}) {
           );
           setIsLoading(false);
           setIsStreamingCatalog(false);
+          setHasLoadedFullCatalog(true);
           setLastAction(copy.actions.cachedCatalogLoaded(cachedCards.length));
         }
+        return;
       }
 
       try {
-        if (dataMode === "remote" && cachedCatalog.length === 0) {
-          const previewCards = mergeFavoriteFlags(await fetchPokemonPreviewCatalog(), favoriteIds);
-
-          if (isActive && previewCards.length > 0) {
-            setCards(previewCards);
-            setSelectedCardId((previousValue) =>
-              previewCards.some((card) => card.id === previousValue) ? previousValue : previewCards[0]?.id ?? null
-            );
-            setIsLoading(false);
-            setIsStreamingCatalog(true);
-            setCatalogNotice(copy.notices.previewCatalog);
-            setLastAction(createCatalogStatusMessage(copy, previewCards.length, true));
-          }
-        }
-
         const remoteCards = dataMode === "local"
           ? cloneDefaultCards()
-          : await fetchPokemonCatalog();
+          : createPokemonShellCatalog();
         const nextCards = mergeFavoriteFlags(remoteCards, favoriteIds);
 
         if (!isActive) {
@@ -823,12 +875,9 @@ export function App(props = {}) {
         );
         setIsLoading(false);
         setIsStreamingCatalog(false);
+        setHasLoadedFullCatalog(dataMode === "local");
         setCatalogNotice(null);
-        setLastAction(createCatalogStatusMessage(copy, nextCards.length, false));
-
-        if (dataMode !== "local") {
-          writeCatalogCache(remoteCards);
-        }
+        setLastAction(createCatalogStatusMessage(copy, nextCards.length));
       } catch (error) {
         const fallbackCards = mergeFavoriteFlags(cloneDefaultCards(), favoriteIds);
 
@@ -844,6 +893,7 @@ export function App(props = {}) {
         );
         setIsLoading(false);
         setIsStreamingCatalog(false);
+        setHasLoadedFullCatalog(true);
         setLoadError(null);
         setCatalogNotice(
           cachedCatalog.length > 0
@@ -860,6 +910,137 @@ export function App(props = {}) {
       isActive = false;
     };
   }, [catalogVersion]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    if (getDataMode() !== "remote" || hasLoadedFullCatalog || typeFilter === "all") {
+      return () => {
+        isActive = false;
+      };
+    }
+
+    async function loadFullCatalogForTypeFilter() {
+      const favoriteIds = cards.filter((card) => card.isFavorite).map((card) => card.id);
+
+      setIsLoading(true);
+      setCatalogNotice(null);
+      setLastAction(copy.actions.typeFilterChanged(typeLabels[typeFilter] ?? typeFilter));
+
+      try {
+        const remoteCards = await fetchPokemonCatalog();
+
+        if (!isActive) {
+          return;
+        }
+
+        const nextCards = mergeFavoriteFlags(remoteCards, favoriteIds);
+
+        setCards(nextCards);
+        setHasLoadedFullCatalog(true);
+        setIsLoading(false);
+        setIsStreamingCatalog(false);
+        setCatalogNotice(null);
+        setLastAction(createCatalogStatusMessage(copy, nextCards.length));
+        writeCatalogCache(remoteCards);
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setIsLoading(false);
+        setTypeFilter("all");
+        setCatalogNotice(copy.notices.fallbackCatalog);
+        setLastAction(`${copy.errors.loadingCardsTitle}. ${error.message}`);
+      }
+    }
+
+    loadFullCatalogForTypeFilter();
+
+    return () => {
+      isActive = false;
+    };
+  }, [cards, copy, hasLoadedFullCatalog, typeFilter, typeLabels]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    if (getDataMode() !== "remote" || hasLoadedFullCatalog || typeFilter !== "all") {
+      return () => {
+        isActive = false;
+      };
+    }
+
+    const targetNumbers = Array.from(new Set([
+      ...(currentPage === "collection" ? collectionVisibleNumbers : []),
+      ...(currentPage === "detail" && selectedCardNumber ? [selectedCardNumber] : []),
+      ...(currentPage === "dashboard" && spotlightCardNumber ? [spotlightCardNumber] : []),
+    ])).filter(Boolean);
+
+    const missingNumbers = targetNumbers.filter((number) => {
+      const targetCard = cards.find((card) => card.number === number);
+      return targetCard && !targetCard.isHydrated && !hydratingCardNumbers[number];
+    });
+
+    if (missingNumbers.length === 0) {
+      return () => {
+        isActive = false;
+      };
+    }
+
+    setHydratingCardNumbers((previousValue) => {
+      const nextValue = { ...previousValue };
+      missingNumbers.forEach((number) => {
+        nextValue[number] = true;
+      });
+      return nextValue;
+    });
+
+    async function hydrateVisibleCards() {
+      try {
+        const hydratedCards = await fetchPokemonCardsByNumbers(missingNumbers);
+
+        if (!isActive || hydratedCards.length === 0) {
+          return;
+        }
+
+        setCards((previousCards) => mergeCardsByNumber(previousCards, hydratedCards));
+      } catch {
+        // Collection shell hydration is a progressive enhancement. If a batch fails,
+        // the shell cards can remain visible and try again on a later pass.
+        if (isActive) {
+          setCatalogNotice(copy.notices.fallbackCatalog);
+        }
+      } finally {
+        if (!isActive) {
+          return;
+        }
+
+        setHydratingCardNumbers((previousValue) => {
+          const nextValue = { ...previousValue };
+          missingNumbers.forEach((number) => {
+            delete nextValue[number];
+          });
+          return nextValue;
+        });
+      }
+    }
+
+    hydrateVisibleCards();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    cards,
+    collectionVisibleNumbers,
+    copy,
+    currentPage,
+    hasLoadedFullCatalog,
+    selectedCardNumber,
+    spotlightCardNumber,
+    typeFilter,
+  ]);
 
   useEffect(() => {
     // 즐겨찾기는 사용자의 개인 상태이므로 카드 배열이 바뀔 때마다 따로 저장한다.
@@ -1143,10 +1324,13 @@ export function App(props = {}) {
     setTypeFilter("all");
     setFavoritesOnly(false);
     setSortMode(nextSettings.defaultSortMode);
+    setCollectionViewport(resetCollectionPage);
     setSettings(nextSettings);
     setLoadError(null);
     setDetailError(null);
     setCatalogNotice(null);
+    setHasLoadedFullCatalog(getDataMode() === "local");
+    setHydratingCardNumbers({});
     setLastAction(copy.actions.resetShowcase);
   }
 
@@ -1154,6 +1338,8 @@ export function App(props = {}) {
     // 다시 불러오기는 catalogVersion만 증가시켜
     // 카탈로그 로드 effect를 다시 실행시키는 단순한 방식으로 구현한다.
     setDetailById({});
+    setHasLoadedFullCatalog(getDataMode() === "local");
+    setHydratingCardNumbers({});
     setCatalogVersion((previousValue) => previousValue + 1);
     setLastAction(copy.actions.reloadingDataset);
   }
@@ -1255,6 +1441,7 @@ export function App(props = {}) {
         rowHeight: COLLECTION_ROW_HEIGHT,
         contentHeight: collectionContentHeight,
         windowOffset: collectionWindowOffset,
+        windowKey: collectionWindowKey,
         searchKeyword,
         typeFilter,
         favoritesOnly,

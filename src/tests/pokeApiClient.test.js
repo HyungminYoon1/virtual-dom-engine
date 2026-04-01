@@ -90,9 +90,9 @@ export async function runPokeApiClientTests() {
       const fetchMock = (url) => {
         fetchCalls.push(url);
 
-        if (url.includes("/pokemon?limit=10&offset=0")) {
+        if (url.includes("/pokemon?limit=24&offset=0")) {
           return createJsonResponse({
-            results: Array.from({ length: 12 }, (_, index) => ({
+            results: Array.from({ length: 30 }, (_, index) => ({
               name: `pokemon-${index + 1}`,
               url: `https://pokeapi.co/api/v2/pokemon/${index + 1}/`,
             })),
@@ -125,11 +125,11 @@ export async function runPokeApiClientTests() {
 
       const cards = await fetchPokemonPreviewCatalog(fetchMock);
 
-      if (cards.length !== 10) {
-        throw new Error(`Expected preview catalog to load 10 cards, received ${cards.length}.`);
+      if (cards.length !== 24) {
+        throw new Error(`Expected preview catalog to load 24 cards, received ${cards.length}.`);
       }
 
-      if (!fetchCalls.some((url) => url.includes("/pokemon?limit=10&offset=0"))) {
+      if (!fetchCalls.some((url) => url.includes("/pokemon?limit=24&offset=0"))) {
         throw new Error("Expected the preview catalog to request only the initial batch.");
       }
     }),
@@ -170,7 +170,7 @@ export async function runPokeApiClientTests() {
           });
         }
 
-        if (url.includes("/pokemon?limit=10&offset=0") || url.includes("/pokemon?limit=1&offset=0")) {
+        if (url.includes("/pokemon?limit=24&offset=0") || url.includes("/pokemon?limit=1&offset=0")) {
           return createJsonResponse({
             results: [
               { name: "raging-bolt", url: "https://pokeapi.co/api/v2/pokemon/1021/" },

@@ -68,7 +68,10 @@ export function CollectionPage(props) {
       onSortChange: props.onSortChange,
     }),
     props.visibleCount === 0
-      ? h("section", { id: "collection-card-grid", className: "card-grid" }, ...renderCards(props))
+      ? h("section", {
+        id: "collection-card-grid",
+        className: "card-grid",
+      }, ...renderCards(props))
       : h("section", {
         id: "collection-scroll-area",
         className: "collection-scroll-area",
@@ -79,6 +82,7 @@ export function CollectionPage(props) {
         style: `height: ${contentHeight}px;`,
       },
       h("div", {
+        key: props.windowKey ?? "collection-window",
         className: "collection-virtual-window",
         style: `transform: translateY(${windowOffset}px);`,
       },

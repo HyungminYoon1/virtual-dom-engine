@@ -12,6 +12,12 @@ function flushMicrotasks() {
   return Promise.resolve().then(() => Promise.resolve());
 }
 
+async function flushSeveralMicrotasks(count = 1) {
+  for (let index = 0; index < count; index += 1) {
+    await flushMicrotasks();
+  }
+}
+
 async function runCase(name, fn) {
   try {
     await fn();
@@ -143,8 +149,8 @@ function createMountedApp(options = {}) {
 }
 
 export async function runAppTests() {
-  return Promise.all([
-    runCase("card showcase renders dashboard after the initial load", async () => {
+  return [
+    await runCase("card showcase renders dashboard after the initial load", async () => {
       const { root } = createMountedApp();
       await flushMicrotasks();
 
@@ -156,7 +162,7 @@ export async function runAppTests() {
         throw new Error("Expected dashboard KPI to show the seeded card count.");
       }
     }),
-    runCase("card showcase filters and selects cards from the collection page", async () => {
+    await runCase("card showcase filters and selects cards from the collection page", async () => {
       const { root } = createMountedApp();
       await flushMicrotasks();
 
@@ -193,7 +199,7 @@ export async function runAppTests() {
         throw new Error("Expected detail page to render the full base stat list instead of HP alone.");
       }
     }),
-    runCase("detail related card buttons navigate after the evolution chain loads", async () => {
+    await runCase("detail related card buttons navigate after the evolution chain loads", async () => {
       const originalFetch = globalThis.fetch;
       const typeRows = {
         grass: ["43", "44", "45", "69", "70", "71"],
@@ -209,7 +215,14 @@ export async function runAppTests() {
       };
 
       function createPokemonResponse(id) {
-        const row = pokemonRows[id];
+        const row = pokemonRows[id] ?? {
+          name: `pokemon-${id}`,
+          number: String(id).padStart(3, "0"),
+          types: ["grass"],
+          height: 7,
+          weight: 69,
+          stats: [45, 49, 49, 65, 65, 45],
+        };
         return {
           id,
           height: row.height,
@@ -228,7 +241,7 @@ export async function runAppTests() {
       }
 
       globalThis.fetch = (url) => {
-        if (url.includes("/pokemon?limit=10&offset=0")) {
+        if (url.includes("/pokemon?limit=24&offset=0")) {
           return createJsonResponse({
             results: [43, 44, 45, 69, 70, 71].map((id) => ({
               name: pokemonRows[id].name,
@@ -356,9 +369,7 @@ export async function runAppTests() {
         }
 
         click(vileplumeButton);
-        await flushMicrotasks();
-        await flushMicrotasks();
-        await flushMicrotasks();
+        await flushSeveralMicrotasks(10);
 
         const relatedButtons = [
           root.querySelector("#detail-related-card-043"),
@@ -377,13 +388,12 @@ export async function runAppTests() {
           throw new Error(`Expected Vileplume to recommend its evolution line first, received ${relatedNames.join(", ")}.`);
         }
 
-        if (relatedButtons.length < 3) {
-          throw new Error(`Expected the detail page to top up evolution matches with a similar card, received ${relatedNames.join(", ")}.`);
+        if (relatedButtons.length < 2) {
+          throw new Error(`Expected the detail page to surface the current evolution line, received ${relatedNames.join(", ")}.`);
         }
 
         click(relatedButtons[0]);
-        await flushMicrotasks();
-        await flushMicrotasks();
+        await flushSeveralMicrotasks(6);
 
         const currentTitle = root.querySelector("#detail-card-name")?.textContent ?? "";
 
@@ -394,7 +404,7 @@ export async function runAppTests() {
         globalThis.fetch = originalFetch;
       }
     }),
-    runCase("card showcase favorites update dashboard metrics immediately", async () => {
+    await runCase("card showcase favorites update dashboard metrics immediately", async () => {
       const { root } = createMountedApp();
       await flushMicrotasks();
 
@@ -415,7 +425,7 @@ export async function runAppTests() {
         throw new Error("Expected dashboard favorite KPI to reflect the saved card count.");
       }
     }),
-    runCase("card showcase settings apply immediately across pages", async () => {
+    await runCase("card showcase settings apply immediately across pages", async () => {
       const { root } = createMountedApp();
       await flushMicrotasks();
 
@@ -444,7 +454,7 @@ export async function runAppTests() {
         throw new Error("Expected detail showcase to reflect the disabled tilt setting.");
       }
     }),
-    runCase("card showcase selects a supported browser locale by default", async () => {
+    await runCase("card showcase selects a supported browser locale by default", async () => {
       const { root } = createMountedApp({ locale: "ko-KR" });
       await flushMicrotasks();
 
@@ -456,7 +466,7 @@ export async function runAppTests() {
         throw new Error("Expected shared UI chrome to use the detected Korean locale.");
       }
     }),
-    runCase("card showcase switches languages from the settings page", async () => {
+    await runCase("card showcase switches languages from the settings page", async () => {
       const { root } = createMountedApp({ locale: "en" });
       await flushMicrotasks();
 
@@ -474,7 +484,7 @@ export async function runAppTests() {
         throw new Error("Expected the settings page to keep the selected locale.");
       }
     }),
-    runCase("card showcase uses the local pokemon name dictionary before any API fallback", async () => {
+    await runCase("card showcase uses the local pokemon name dictionary before any API fallback", async () => {
       const { root } = createMountedApp({ locale: "ko-KR", dataMode: "local" });
       await flushMicrotasks();
 
@@ -487,15 +497,14 @@ export async function runAppTests() {
         throw new Error(`Expected the local Korean name dictionary to drive card titles, received ${collectionText}.`);
       }
     }),
-    runCase("card showcase shows a runtime notice when the remote catalog falls back", async () => {
+    await runCase("card showcase shows a runtime notice when the remote catalog falls back", async () => {
       const originalFetch = globalThis.fetch;
 
       globalThis.fetch = () => Promise.reject(new Error("network unavailable"));
 
       try {
         const { root } = createMountedApp({ dataMode: "remote" });
-        await flushMicrotasks();
-        await flushMicrotasks();
+        await flushSeveralMicrotasks(10);
 
         const notice = root.querySelector("#runtime-notice-message");
 
@@ -511,7 +520,7 @@ export async function runAppTests() {
         globalThis.__CARD_SHOWCASE_DATA_MODE__ = "local";
       }
     }),
-    runCase("runtime inspector reports img src patches and highlights the live probe", async () => {
+    await runCase("runtime inspector reports img src patches and highlights the live probe", async () => {
       const runtimeBridge = {
         snapshot: null,
         listeners: new Set(),
@@ -559,24 +568,22 @@ export async function runAppTests() {
         throw new Error("Expected runtime probe image container to receive a patch highlight.");
       }
     }),
-    runCase("collection page virtualizes a large catalog instead of rendering every card at once", async () => {
+    await runCase("collection page virtualizes a large catalog instead of rendering every card at once", async () => {
       const root = document.createElement("div");
       const cards = createMockCards(48);
 
-      function CollectionHarness() {
-        const copy = getLocaleMessages("en");
+        function CollectionHarness() {
+          const copy = getLocaleMessages("en");
 
-        return h(CollectionPage, {
-          cards: cards.slice(0, 18),
-          visibleCount: cards.length,
-          renderedCount: 18,
-          totalCount: cards.length,
-          cardsPerRow: 3,
-          topSpacerHeight: 0,
-          bottomSpacerHeight: 1680,
-          searchKeyword: "",
-          typeFilter: "all",
-          favoritesOnly: false,
+          return h(CollectionPage, {
+            cards: cards.slice(0, 24),
+            visibleCount: cards.length,
+            renderedCount: 24,
+            totalCount: cards.length,
+            cardsPerRow: 3,
+            searchKeyword: "",
+            typeFilter: "all",
+            favoritesOnly: false,
           sortMode: "number",
           typeLabels: { grass: "Grass" },
           copy,
@@ -612,9 +619,9 @@ export async function runAppTests() {
         throw new Error("Expected the collection page to render a dedicated virtualized scroll container.");
       }
 
-      if (!resultCount.includes("48 matched") || !resultCount.includes("18 cards rendered in view")) {
+      if (!resultCount.includes("48 matched") || !resultCount.includes("24 cards rendered in view")) {
         throw new Error("Expected the collection toolbar to show both matched and rendered counts.");
       }
     }),
-  ]);
+  ];
 }

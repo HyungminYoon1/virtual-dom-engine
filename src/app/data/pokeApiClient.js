@@ -3,11 +3,13 @@
  * - PokeAPI 공개 데이터를 카드 쇼케이스 앱에서 쓸 수 있는 단순 카드 레코드로 정규화한다.
  */
 
+import { getLocalPokemonName } from "./pokemon-names/index.js";
+
 const API_ROOT = "https://pokeapi.co/api/v2";
 const ARTWORK_ROOT = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork";
 const THUMB_ROOT = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon";
 const MAX_NATIONAL_DEX = 1025;
-const PREVIEW_CARD_COUNT = 10;
+const PREVIEW_CARD_COUNT = 24;
 const IGNORED_TYPES = new Set(["unknown", "shadow"]);
 const LOCALE_NAME_PRIORITY = {
   en: ["en"],
@@ -78,6 +80,64 @@ function getShowcaseRarity(id, types) {
   }
 
   return "Rare";
+}
+
+function createCardRecordFromPokemonData(pokemonData, nameOverride, options = {}) {
+  const pokemonId = Number(pokemonData.id);
+  const number = String(pokemonId).padStart(3, "0");
+  const types = sortTypes((pokemonData.types ?? []).map((entry) => entry.type.name));
+  const sprites = getSpriteUrls(pokemonId);
+  const fallbackName = getLocalPokemonName("en", number) ?? normalizeName(nameOverride ?? `Pokemon ${number}`);
+
+  return {
+    id: createCardId(number),
+    name: fallbackName,
+    number,
+    imageUrl: sprites.imageUrl,
+    thumbUrl: sprites.thumbUrl,
+    types,
+    rarity: getShowcaseRarity(pokemonId, types),
+    height: pokemonData.height / 10,
+    weight: pokemonData.weight / 10,
+    baseStats: {
+      hp: pokemonData.stats.find((entry) => entry.stat.name === "hp")?.base_stat ?? 0,
+      attack: pokemonData.stats.find((entry) => entry.stat.name === "attack")?.base_stat ?? 0,
+      defense: pokemonData.stats.find((entry) => entry.stat.name === "defense")?.base_stat ?? 0,
+      specialAttack: pokemonData.stats.find((entry) => entry.stat.name === "special-attack")?.base_stat ?? 0,
+      specialDefense: pokemonData.stats.find((entry) => entry.stat.name === "special-defense")?.base_stat ?? 0,
+      speed: pokemonData.stats.find((entry) => entry.stat.name === "speed")?.base_stat ?? 0,
+    },
+    flavor: options.flavor
+      ?? "This card shell hydrated its collection stats from the remote Pokemon catalog.",
+    isFavorite: false,
+    isHydrated: true,
+  };
+}
+
+export function createPokemonShellCatalog(limit = MAX_NATIONAL_DEX) {
+  const safeLimit = Math.max(1, Math.min(limit, MAX_NATIONAL_DEX));
+
+  return Array.from({ length: safeLimit }, (_, index) => {
+    const pokemonId = index + 1;
+    const number = String(pokemonId).padStart(3, "0");
+    const sprites = getSpriteUrls(pokemonId);
+
+    return {
+      id: createCardId(number),
+      name: getLocalPokemonName("en", number) ?? `Pokemon ${number}`,
+      number,
+      imageUrl: sprites.imageUrl,
+      thumbUrl: sprites.thumbUrl,
+      types: [],
+      rarity: getShowcaseRarity(pokemonId, []),
+      height: null,
+      weight: null,
+      baseStats: null,
+      flavor: "Collection shell card. Visible cards hydrate their field data on demand.",
+      isFavorite: false,
+      isHydrated: false,
+    };
+  });
 }
 
 function sortTypes(types) {
@@ -185,6 +245,7 @@ export async function fetchPokemonCatalog(fetchImpl = globalThis.fetch) {
         baseStats: null,
         flavor: "Open the detail page to load this Pokemon's full species stats and flavor text.",
         isFavorite: false,
+        isHydrated: true,
       };
     })
     .filter(Boolean);
@@ -208,31 +269,36 @@ export async function fetchPokemonPreviewCatalog(fetchImpl = globalThis.fetch, l
       const types = sortTypes(pokemonData.types.map((entry) => entry.type.name));
       const sprites = getSpriteUrls(pokemonId);
 
-      return {
-        id: createCardId(number),
-        name: normalizeName(item.name),
-        number,
-        imageUrl: sprites.imageUrl,
-        thumbUrl: sprites.thumbUrl,
-        types,
-        rarity: getShowcaseRarity(pokemonId, types),
-        height: pokemonData.height / 10,
-        weight: pokemonData.weight / 10,
-        baseStats: {
-          hp: pokemonData.stats.find((entry) => entry.stat.name === "hp")?.base_stat ?? 0,
-          attack: pokemonData.stats.find((entry) => entry.stat.name === "attack")?.base_stat ?? 0,
-          defense: pokemonData.stats.find((entry) => entry.stat.name === "defense")?.base_stat ?? 0,
-          specialAttack: pokemonData.stats.find((entry) => entry.stat.name === "special-attack")?.base_stat ?? 0,
-          specialDefense: pokemonData.stats.find((entry) => entry.stat.name === "special-defense")?.base_stat ?? 0,
-          speed: pokemonData.stats.find((entry) => entry.stat.name === "speed")?.base_stat ?? 0,
-        },
+      return createCardRecordFromPokemonData(pokemonData, item.name, {
         flavor: "Preview cards load first so the collection can open immediately while the full national catalog streams in.",
-        isFavorite: false,
-      };
+      });
     })
   );
 
   return detailRows.filter(Boolean);
+}
+
+export async function fetchPokemonCardsByNumbers(numbers, fetchImpl = globalThis.fetch) {
+  assertFetch(fetchImpl);
+
+  if (!Array.isArray(numbers) || numbers.length === 0) {
+    return [];
+  }
+
+  const uniqueNumbers = Array.from(new Set(
+    numbers
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0 && value <= MAX_NATIONAL_DEX)
+  ));
+
+  const rows = await Promise.all(uniqueNumbers.map(async (pokemonNumber) => {
+    const pokemonData = await readJson(fetchImpl(`${API_ROOT}/pokemon/${pokemonNumber}`));
+    return createCardRecordFromPokemonData(pokemonData, null, {
+      flavor: "Visible collection cards hydrate their stats as you browse the national dex.",
+    });
+  }));
+
+  return rows.filter(Boolean);
 }
 
 function extractFlavorText(speciesData) {
